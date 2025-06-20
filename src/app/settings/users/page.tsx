@@ -1,19 +1,19 @@
 
 "use client";
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect } from 'react';
 import { AppLayout } from '@/components/layout/app-layout';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
+import { Card, CardHeader, CardTitle, CardDescription, CardFooter, CardContent } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { PlusCircle, Edit, Trash2, Users as UsersIcon, Building } from 'lucide-react';
+import { PlusCircle, Users as UsersIcon, Building, Edit, Trash2 } from 'lucide-react';
 import type { User, Group } from '@/types';
-import { mockUsersData, mockGroupsData, addUser as addMockUser, updateUser as updateMockUser, deleteUser as deleteMockUser, addGroup as addMockGroup, updateGroup as updateMockGroup, deleteGroup as deleteMockGroup, getGroupById } from '@/lib/mock-data';
+import { mockUsersData, mockGroupsData, addUser as addMockUser, updateUser as updateMockUser, deleteUser as deleteMockUser, addGroup as addMockGroup, updateGroup as updateMockGroup, deleteGroup as deleteMockGroup } from '@/lib/mock-data';
 import { ManageUserDialog } from '@/components/settings/users/manage-user-dialog';
 import { ManageGroupDialog } from '@/components/settings/users/manage-group-dialog';
 import { ConfirmDialog } from '@/components/common/confirm-dialog';
 import { useToast } from '@/hooks/use-toast';
-import { Badge } from '@/components/ui/badge';
+import { UserListItem } from '@/components/settings/users/user-list-item';
 
 export default function UsersAndGroupsPage() {
   const { toast } = useToast();
@@ -32,7 +32,7 @@ export default function UsersAndGroupsPage() {
   const [groupToDelete, setGroupToDelete] = useState<Group | null>(null);
 
   const refreshData = () => {
-    setUsers([...mockUsersData]); // Use spread to create new array instance for re-render
+    setUsers([...mockUsersData]);
     setGroups([...mockGroupsData]);
   };
 
@@ -77,6 +77,15 @@ export default function UsersAndGroupsPage() {
     setUserToDelete(null);
   };
 
+  const handleResetPassword = (user: User) => {
+    // In a real app, this would trigger a password reset flow (e.g., email).
+    // For this mock, we'll just show a toast.
+    toast({
+        title: "Password Reset (Mock)",
+        description: `Password reset requested for ${user.name}. This is a mock action.`,
+    });
+  };
+
   // Group Handlers
   const handleOpenAddGroupDialog = () => {
     setGroupToEdit(null);
@@ -109,7 +118,7 @@ export default function UsersAndGroupsPage() {
     if (groupToDelete) {
       deleteMockGroup(groupToDelete.id);
       toast({ title: "Group Deleted", description: `Group "${groupToDelete.name}" has been removed.` });
-      refreshData(); // Refresh users too, as group deletion might affect user.groupIds
+      refreshData(); 
     }
     setIsConfirmDeleteGroupDialogOpen(false);
     setGroupToDelete(null);
@@ -139,41 +148,16 @@ export default function UsersAndGroupsPage() {
           </div>
 
           <TabsContent value="users">
-            <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+            <div className="space-y-4">
               {users.map(user => (
-                <Card key={user.id} className="glassmorphic">
-                  <CardHeader>
-                    <div className="flex justify-between items-start">
-                        <CardTitle className="text-xl">{user.name}</CardTitle>
-                        <Badge variant="secondary">{user.role}</Badge>
-                    </div>
-                    <CardDescription>{user.email}</CardDescription>
-                  </CardHeader>
-                  <CardContent>
-                    {user.groupIds && user.groupIds.length > 0 && (
-                      <div>
-                        <p className="text-sm font-medium mb-1">Member of:</p>
-                        <div className="flex flex-wrap gap-1.5">
-                          {user.groupIds.map(gid => {
-                            const group = getGroupById(gid);
-                            return group ? <Badge key={gid} variant="outline">{group.name}</Badge> : null;
-                          })}
-                        </div>
-                      </div>
-                    )}
-                     {(!user.groupIds || user.groupIds.length === 0) && (
-                        <p className="text-sm text-muted-foreground italic">Not a member of any groups.</p>
-                     )}
-                  </CardContent>
-                  <CardFooter className="border-t pt-4">
-                    <Button variant="outline" size="sm" onClick={() => handleOpenEditUserDialog(user)} className="mr-2">
-                      <Edit className="mr-2 h-4 w-4" />Edit
-                    </Button>
-                    <Button variant="ghost" size="sm" onClick={() => handleOpenDeleteUserDialog(user)} className="text-destructive hover:text-destructive hover:bg-destructive/10">
-                      <Trash2 className="mr-2 h-4 w-4" />Delete
-                    </Button>
-                  </CardFooter>
-                </Card>
+                <UserListItem 
+                  key={user.id} 
+                  user={user} 
+                  allGroups={groups}
+                  onEdit={() => handleOpenEditUserDialog(user)}
+                  onDelete={() => handleOpenDeleteUserDialog(user)}
+                  onResetPassword={() => handleResetPassword(user)} 
+                />
               ))}
                {users.length === 0 && <p className="text-muted-foreground col-span-full text-center py-8">No users found.</p>}
             </div>
@@ -182,7 +166,7 @@ export default function UsersAndGroupsPage() {
           <TabsContent value="groups">
             <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
               {groups.map(group => (
-                <Card key={group.id} className="glassmorphic">
+                <Card key={group.id}>
                   <CardHeader>
                     <CardTitle className="text-xl">{group.name}</CardTitle>
                     {group.description && <CardDescription>{group.description}</CardDescription>}
