@@ -17,13 +17,12 @@ import {
   SidebarSeparator,
 } from '@/components/ui/sidebar';
 import { AppLogo } from '@/components/icons/logo';
-import { Button } from '@/components/ui/button'; // Button might not be directly used here anymore
+// Button import removed as it's not directly used here.
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
   LayoutDashboard,
   Settings,
   Users,
-  // FolderKanban, // Not used
   LogOut,
   Moon,
   Sun,
@@ -75,7 +74,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                   <SidebarMenuItem key={item.label + '-' + item.href}>
                     <Link href={item.href} passHref legacyBehavior={false}>
                       <SidebarMenuButton
-                        isActive={pathname === '/' && item.href === '/dashboard' ? true : pathname === item.href}
+                        isActive={pathname === item.href} // Simplified active state logic
                         disabled={item.disabled}
                         tooltip={item.label}
                         aria-label={item.label}
