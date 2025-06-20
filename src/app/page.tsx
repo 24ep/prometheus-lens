@@ -6,15 +6,7 @@ import { AssetListItem } from '@/components/common/asset-list-item';
 import { mockAssetsData, mockFoldersData, addFolder, updateFolder as updateMockFolder, deleteFolder, updateAssetDetails } from '@/lib/mock-data';
 import type { Asset, AssetFolder } from '@/types';
 import { Button } from '@/components/ui/button';
-import { PlusCircle, Filter, Edit2, Trash2, Folder as FolderIcon, ChevronDown, ChevronRight } from 'lucide-react';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import React, { useState, useMemo, useEffect, useCallback } from 'react';
+import { PlusCircle, Filter, Edit2, Trash2, Folder as FolderIcon, ChevronDown, ChevronRight, LayoutGrid, List } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { AssetDetailsDialog } from '@/components/assets/asset-details-dialog';
 import { CreateItemTypeDialog } from '@/components/folders/create-item-type-dialog';
@@ -24,96 +16,125 @@ import { useToast } from '@/hooks/use-toast';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
 import { AssetConnectionWizard } from '@/components/assets/asset-connection-wizard';
 import { cn } from '@/lib/utils';
+import React, { useState, useMemo, useEffect, useCallback } from 'react';
+import { ScrollArea } from '@/components/ui/scroll-area';
+import { Separator } from '@/components/ui/separator';
 
-interface FolderTreeItemProps {
+
+interface FolderNavItemProps {
   folder: AssetFolder;
   allFolders: AssetFolder[];
   level: number;
-  assetsInFolder: Asset[]; // Assets for THIS folder instance
-  originalFilteredAssets: Asset[]; // The complete list of assets filtered by global filters
+  onSelectFolder: (folderId: string) => void;
   onEditFolder: (folder: AssetFolder) => void;
   onDeleteFolder: (folder: AssetFolder) => void;
-  onAssetDetailsClick: (asset: Asset) => void;
+  selectedFolderId?: string | null;
+  assetCounts: Record<string, number>; // FolderId -> count of assets (including subfolders)
   initiallyOpen?: boolean;
 }
 
-const FolderTreeItem: React.FC<FolderTreeItemProps> = ({
+const FolderNavItem: React.FC<FolderNavItemProps> = ({
   folder,
   allFolders,
   level,
-  assetsInFolder,
-  originalFilteredAssets,
+  onSelectFolder,
   onEditFolder,
   onDeleteFolder,
-  onAssetDetailsClick,
+  selectedFolderId,
+  assetCounts,
   initiallyOpen = false,
 }) => {
   const [isOpen, setIsOpen] = useState(initiallyOpen);
   const childFolders = allFolders.filter(f => f.parentId === folder.id).sort((a,b) => a.name.localeCompare(b.name));
-
-  const hasContent = assetsInFolder.length > 0 || childFolders.length > 0;
+  const hasChildren = childFolders.length > 0;
+  const isActive = selectedFolderId === folder.id;
+  const count = assetCounts[folder.id] || 0;
 
   useEffect(() => {
-    setIsOpen(initiallyOpen);
-  }, [initiallyOpen]);
+    // If a folder is selected and it's this one or a child, ensure it's open
+     if (selectedFolderId) {
+        let currentFolder = allFolders.find(f => f.id === selectedFolderId);
+        let shouldOpen = false;
+        while(currentFolder) {
+            if (currentFolder.id === folder.id) {
+                shouldOpen = true;
+                break;
+            }
+            currentFolder = currentFolder.parentId ? allFolders.find(f => f.id === currentFolder!.parentId) : undefined;
+        }
+        if(shouldOpen && !isOpen) setIsOpen(true);
+    } else {
+        setIsOpen(initiallyOpen); // Default open state if no selection forces it
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedFolderId, folder.id, allFolders, initiallyOpen]); // isOpen removed from deps to avoid loop
+
 
   return (
-    <div style={{ paddingLeft: level > 0 ? `${level * 1.5}rem` : '0' }} className="my-0.5">
-      <div className="flex justify-between items-center py-1.5 px-2 rounded-md hover:bg-muted/60 group">
+    <div className="my-0.5">
+      <div 
+        className={cn(
+          "flex justify-between items-center py-1.5 px-2 rounded-md group text-sm",
+          isActive ? "bg-primary/10 text-primary font-medium" : "hover:bg-muted/60"
+        )}
+        style={{ paddingLeft: `${0.5 + level * 1}rem` }}
+      >
         <div 
             className="flex items-center gap-1.5 flex-grow min-w-0 cursor-pointer" 
-            onClick={() => hasContent && setIsOpen(!isOpen)} 
+            onClick={() => onSelectFolder(folder.id)}
             role="button" 
             tabIndex={0} 
-            onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && hasContent && setIsOpen(!isOpen)} 
+            onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && onSelectFolder(folder.id)} 
         >
-          {hasContent ? (
-            isOpen ? <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground" /> : <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" />
-          ) : (
-            <div className="w-4 h-4 shrink-0"></div> 
-          )}
-          <FolderIcon className="h-5 w-5 text-primary shrink-0" />
-          <span className="font-headline font-medium text-base truncate" title={folder.name}>{folder.name}</span>
-          <span className="text-xs text-muted-foreground ml-1">({assetsInFolder.length})</span>
+          <button
+            onClick={(e) => {
+              e.stopPropagation(); // Prevent selecting folder when toggling expand
+              if (hasChildren) setIsOpen(!isOpen);
+            }}
+            className={cn(
+              "p-0.5 rounded-sm hover:bg-muted-foreground/10",
+              !hasChildren && "opacity-0 pointer-events-none" // Hide if no children
+            )}
+            aria-label={hasChildren ? (isOpen ? "Collapse folder" : "Expand folder") : undefined}
+            disabled={!hasChildren}
+          >
+            {hasChildren ? (
+              isOpen ? <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground" /> : <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" />
+            ) : (
+              <div className="w-4 h-4 shrink-0"></div> 
+            )}
+          </button>
+          <FolderIcon className="h-4 w-4 text-primary shrink-0" />
+          <span className="truncate" title={folder.name}>{folder.name}</span>
         </div>
-        <div className="flex gap-0.5 shrink-0 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity">
-          <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => onEditFolder(folder)} aria-label={`Edit folder ${folder.name}`}>
-            <Edit2 className="h-3.5 w-3.5 text-muted-foreground hover:text-primary" />
-          </Button>
-          <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => onDeleteFolder(folder)} aria-label={`Delete folder ${folder.name}`}>
-            <Trash2 className="h-3.5 w-3.5 text-muted-foreground hover:text-destructive" />
-          </Button>
+        <div className="flex items-center gap-0.5 shrink-0">
+          <span className={cn("text-xs mr-1", isActive ? "text-primary/80" : "text-muted-foreground")}>({count})</span>
+          <div className="opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity">
+            <Button variant="ghost" size="icon" className="h-6 w-6" onClick={(e) => { e.stopPropagation(); onEditFolder(folder);}} aria-label={`Edit folder ${folder.name}`}>
+              <Edit2 className="h-3.5 w-3.5 text-muted-foreground hover:text-primary" />
+            </Button>
+            <Button variant="ghost" size="icon" className="h-6 w-6" onClick={(e) => { e.stopPropagation(); onDeleteFolder(folder);}} aria-label={`Delete folder ${folder.name}`}>
+              <Trash2 className="h-3.5 w-3.5 text-muted-foreground hover:text-destructive" />
+            </Button>
+          </div>
         </div>
       </div>
-      {isOpen && (
-        <div className="mt-0.5 border-l-2 border-muted/70 pl-2.5 ml-[calc(0.5rem+7px)]"> {/* Indent content under folder icon, adjust ml */}
+      {isOpen && hasChildren && (
+        <div className="mt-0.5">
           {childFolders.map(child => (
-            <FolderTreeItem
+            <FolderNavItem
               key={child.id}
               folder={child}
               allFolders={allFolders}
-              level={level + 1} // Corrected level
-              assetsInFolder={originalFilteredAssets.filter(a => a.folderId === child.id)} // Calculate for child
-              originalFilteredAssets={originalFilteredAssets} // Pass down the full list
+              level={level + 1}
+              onSelectFolder={onSelectFolder}
               onEditFolder={onEditFolder}
               onDeleteFolder={onDeleteFolder}
-              onAssetDetailsClick={onAssetDetailsClick}
-              initiallyOpen={false}
+              selectedFolderId={selectedFolderId}
+              assetCounts={assetCounts}
+              initiallyOpen={false} // Children initially closed unless selection forces them open
             />
           ))}
-          {assetsInFolder.length > 0 && (
-            <div className="space-y-1 py-1">
-              {assetsInFolder.map(asset => (
-                <AssetListItem key={asset.id} asset={asset} onDetailsClick={onAssetDetailsClick} />
-              ))}
-            </div>
-          )}
-           {assetsInFolder.length === 0 && childFolders.length === 0 && hasContent && ( 
-             <p className="text-xs text-muted-foreground py-1 px-2 italic">No items match current filters in this folder.</p>
-           )}
-           {!hasContent && (
-             <p className="text-xs text-muted-foreground py-1 px-2 italic">This folder is empty.</p>
-           )}
         </div>
       )}
     </div>
@@ -124,7 +145,7 @@ const FolderTreeItem: React.FC<FolderTreeItemProps> = ({
 export default function AllAssetsPage() {
   const { toast } = useToast();
   const [searchTerm, setSearchTerm] = useState('');
-  const [selectedFolderFilter, setSelectedFolderFilter] = useState<string | 'all'>('all');
+  const [selectedFolderFilter, setSelectedFolderFilter] = useState<string | 'all' | 'unfiled'>('all');
   
   const [assets, setAssets] = useState<Asset[]>([]);
   const [folders, setFolders] = useState<AssetFolder[]>([]);
@@ -138,12 +159,12 @@ export default function AllAssetsPage() {
   const [isConfirmDeleteFolderDialogOpen, setIsConfirmDeleteFolderDialogOpen] = useState(false);
   const [folderToDelete, setFolderToDelete] = useState<AssetFolder | null>(null);
   const [isAssetWizardOpen, setIsAssetWizardOpen] = useState(false);
+  const [viewMode, setViewMode] = useState<'list' | 'grid'>('list'); // Default to list view
 
   const refreshData = useCallback(() => {
     setAssets([...mockAssetsData]); 
     setFolders([...mockFoldersData].sort((a, b) => a.name.localeCompare(b.name))); 
   }, []);
-
 
   useEffect(() => {
     refreshData();
@@ -176,9 +197,23 @@ export default function AllAssetsPage() {
       return matchesSearch && matchesFolder;
     });
   }, [searchTerm, selectedFolderFilter, assets, folders, getFolderAndSubFolderIds]);
+  
+  const assetCountsByFolder = useMemo(() => {
+    const counts: Record<string, number> = {};
+    const allFolderIdsIncludingChildren = (folderId: string): string[] => getFolderAndSubFolderIds(folderId, folders);
+
+    folders.forEach(folder => {
+        const idsToCount = allFolderIdsIncludingChildren(folder.id);
+        counts[folder.id] = assets.filter(asset => asset.folderId && idsToCount.includes(asset.folderId)).length;
+    });
+    return counts;
+  }, [assets, folders, getFolderAndSubFolderIds]);
+
 
   const rootFolders = useMemo(() => folders.filter(f => !f.parentId).sort((a,b) => a.name.localeCompare(b.name)), [folders]);
-  const uncategorizedAssets = useMemo(() => filteredAssets.filter(asset => !asset.folderId), [filteredAssets]);
+  const totalAssetsCount = useMemo(() => assets.length, [assets]);
+  const uncategorizedAssetsCount = useMemo(() => assets.filter(asset => !asset.folderId).length, [assets]);
+
 
   const handleOpenAssetDetails = (asset: Asset) => {
     setSelectedAssetForDetails(asset);
@@ -193,7 +228,7 @@ export default function AllAssetsPage() {
        if (updatedAssetFromMock) setSelectedAssetForDetails(updatedAssetFromMock);
     }
   };
-
+  
   const handleAssetConfigurationSave = (updatedAssetFromDialog: Asset) => {
     refreshData();
     if (selectedAssetForDetails && selectedAssetForDetails.id === updatedAssetFromDialog.id) {
@@ -262,117 +297,123 @@ export default function AllAssetsPage() {
     setFolderToDelete(null);
   };
   
-  const isFolderOrDescendantSelected = useCallback((folderId: string, selectedFilterId: string, allFolders: AssetFolder[]): boolean => {
-    if (folderId === selectedFilterId) return true;
-    const children = allFolders.filter(f => f.parentId === folderId);
-    for (const child of children) {
-        if (isFolderOrDescendantSelected(child.id, selectedFilterId, allFolders)) return true;
-    }
-    return false;
-  }, []);
+  const handleSelectFolderFilter = (folderId: string | 'all' | 'unfiled') => {
+    setSelectedFolderFilter(folderId);
+  };
+
 
   return (
     <AppLayout>
-      <div className="mb-6 flex flex-col sm:flex-row justify-between items-center gap-4">
-        <div>
-          <h1 className="text-3xl font-headline font-bold text-foreground">Asset Management</h1>
-          <p className="text-muted-foreground">Browse, filter, and manage all your monitored assets and folders.</p>
-        </div>
-        <Button onClick={() => setIsCreateItemTypeDialogOpen(true)}>
-          <PlusCircle className="mr-2 h-5 w-5" />
-          Add Item
-        </Button>
-      </div>
-
-      <div className="mb-6 p-4 rounded-lg border bg-card">
-        <div className="grid grid-cols-1 md:grid-cols-[1fr_auto] gap-4 items-end">
-          <Input 
-            placeholder="Search assets (name, type, tag)..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="bg-background/70 focus:bg-background"
-          />
-          <Select value={selectedFolderFilter} onValueChange={setSelectedFolderFilter}>
-            <SelectTrigger className="w-full md:w-[280px] bg-background/70 focus:bg-background">
-              <Filter className="mr-2 h-4 w-4 text-muted-foreground" />
-              <SelectValue placeholder="Filter by folder..." />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All Folders & Assets</SelectItem>
-              {folders.filter(f => !f.parentId).sort((a,b) => a.name.localeCompare(b.name)).map(folder => ( 
-                <SelectItem key={folder.id} value={folder.id}>{folder.name}</SelectItem>
+      <div className="flex h-[calc(100vh-var(--header-height,4rem)-2rem)]"> {/* Main flex container */}
+        {/* Left Column: Folder Navigation */}
+        <div className="w-64 xl:w-72 border-r bg-card/30 shrink-0">
+          <ScrollArea className="h-full p-3">
+            <h2 className="text-sm font-semibold text-muted-foreground px-2 mb-2">BROWSE FOLDERS</h2>
+            <nav className="space-y-0.5">
+              <button
+                onClick={() => handleSelectFolderFilter('all')}
+                className={cn(
+                  "w-full flex items-center gap-2 py-1.5 px-2 rounded-md text-sm hover:bg-muted",
+                  selectedFolderFilter === 'all' && "bg-primary/10 text-primary font-medium"
+                )}
+              >
+                <LayoutGrid className="h-4 w-4" /> All Assets <span className="ml-auto text-xs text-muted-foreground">({totalAssetsCount})</span>
+              </button>
+              <button
+                onClick={() => handleSelectFolderFilter('unfiled')}
+                className={cn(
+                  "w-full flex items-center gap-2 py-1.5 px-2 rounded-md text-sm hover:bg-muted",
+                  selectedFolderFilter === 'unfiled' && "bg-primary/10 text-primary font-medium"
+                )}
+              >
+                <FolderIcon className="h-4 w-4" /> Uncategorized <span className="ml-auto text-xs text-muted-foreground">({uncategorizedAssetsCount})</span>
+              </button>
+              <Separator className="my-2" />
+              {rootFolders.map(folder => (
+                <FolderNavItem
+                  key={folder.id}
+                  folder={folder}
+                  allFolders={folders}
+                  level={0}
+                  onSelectFolder={handleSelectFolderFilter}
+                  onEditFolder={handleEditFolder}
+                  onDeleteFolder={handleDeleteFolder}
+                  selectedFolderId={selectedFolderFilter !== 'all' && selectedFolderFilter !== 'unfiled' ? selectedFolderFilter : null}
+                  assetCounts={assetCountsByFolder}
+                  initiallyOpen={true} 
+                />
               ))}
-              <SelectItem value="unfiled">Uncategorized Assets</SelectItem>
-            </SelectContent>
-          </Select>
+               {folders.length === 0 && (
+                <p className="text-xs text-muted-foreground px-2 py-4 text-center">No folders created. Create one using 'Add Item'.</p>
+              )}
+            </nav>
+          </ScrollArea>
         </div>
-      </div>
-      
-      {(folders.length === 0 && uncategorizedAssets.length === 0 && searchTerm === '') && (
-        <div className="text-center py-10">
-          <p className="text-xl text-muted-foreground font-semibold">No assets or folders found.</p>
-          <p className="text-muted-foreground">Try adding a new item.</p>
-        </div>
-      )}
 
-      <div className="space-y-1"> {/* Reduced space-y for tighter tree */}
-        {rootFolders.map(folder => {
-           if (selectedFolderFilter !== 'all' && selectedFolderFilter !== 'unfiled' && !isFolderOrDescendantSelected(folder.id, selectedFolderFilter, folders) && !folders.find(f => f.id === selectedFolderFilter)?.parentId === folder.id) {
-             let show = false;
-             let current = folders.find(f => f.id === selectedFolderFilter);
-             while(current) {
-                if (current.id === folder.id) {
-                    show = true;
-                    break;
-                }
-                current = current.parentId ? folders.find(f => f.id === current!.parentId) : undefined;
-             }
-             if (!show && !(folders.find(f => f.id === selectedFolderFilter)?.parentId === folder.id)) return null;
-           }
-           
-           const assetsDirectlyInFolder = filteredAssets.filter(a => a.folderId === folder.id);
-
-           return (
-            <FolderTreeItem
-              key={folder.id}
-              folder={folder}
-              allFolders={folders}
-              level={0}
-              assetsInFolder={assetsDirectlyInFolder}
-              originalFilteredAssets={filteredAssets}
-              onEditFolder={handleEditFolder}
-              onDeleteFolder={handleDeleteFolder}
-              onAssetDetailsClick={handleOpenAssetDetails}
-              initiallyOpen={selectedFolderFilter === 'all' || folder.id === selectedFolderFilter || (selectedFolderFilter !== 'unfiled' && isFolderOrDescendantSelected(folder.id, selectedFolderFilter, folders))}
-            />
-           );
-        })}
-
-        {uncategorizedAssets.length > 0 && (selectedFolderFilter === 'all' || selectedFolderFilter === 'unfiled') && (
-          <div className="mt-3 pt-2 border-t border-dashed">
-            <div className="flex justify-between items-center mb-1 py-1.5 px-2 rounded-md">
-              <div className="flex items-center gap-2">
-                 <FolderIcon className="h-5 w-5 text-muted-foreground/80" />
-                <h2 className="font-headline font-medium text-base text-muted-foreground">Uncategorized Assets ({uncategorizedAssets.length})</h2>
+        {/* Right Column: Asset Display */}
+        <div className="flex-1 flex flex-col overflow-hidden">
+          <div className="p-4 pb-3 border-b bg-background/80 backdrop-blur-sm sticky top-0 z-10 shrink-0">
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+              <div>
+                <h1 className="text-2xl font-headline font-bold text-foreground">
+                  {selectedFolderFilter === 'all' ? 'All Assets' : 
+                   selectedFolderFilter === 'unfiled' ? 'Uncategorized Assets' :
+                   folders.find(f => f.id === selectedFolderFilter)?.name || 'Assets'}
+                </h1>
+                 <p className="text-sm text-muted-foreground">
+                    {filteredAssets.length} item(s) found.
+                    {searchTerm && ` (filtered by "${searchTerm}")`}
+                </p>
+              </div>
+              <div className="flex items-center gap-2 w-full sm:w-auto">
+                <Input 
+                  placeholder="Search assets..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="bg-background focus:bg-background h-9 flex-grow sm:flex-grow-0 sm:w-64"
+                />
+                <Button onClick={() => setIsCreateItemTypeDialogOpen(true)} size="sm" className="h-9">
+                  <PlusCircle className="mr-2 h-4 w-4" />
+                  Add Item
+                </Button>
+                {/* View Mode Toggle - Optional, keeping simple for now
+                <Button variant="outline" size="icon" className="h-9 w-9" onClick={() => setViewMode(viewMode === 'list' ? 'grid' : 'list')}>
+                  {viewMode === 'list' ? <LayoutGrid className="h-4 w-4"/> : <List className="h-4 w-4" />}
+                </Button>
+                */}
               </div>
             </div>
-            <div className="space-y-1 pl-3 ml-[calc(0.5rem+7px)] border-l-2 border-transparent">
-              {uncategorizedAssets.map(asset => (
-                <AssetListItem key={asset.id} asset={asset} onDetailsClick={handleOpenAssetDetails} />
-              ))}
-            </div>
           </div>
-        )}
-        
-        {filteredAssets.length === 0 && (searchTerm !== '' || (selectedFolderFilter !== 'all' && selectedFolderFilter !== 'unfiled' && rootFolders.every(folder => !isFolderOrDescendantSelected(folder.id, selectedFolderFilter, folders)) && uncategorizedAssets.length === 0) ) && (
-            <div className="text-center py-10">
-            <p className="text-lg text-muted-foreground">No assets found matching your current filters.</p>
-            {searchTerm && <p className="text-sm text-muted-foreground">Search term: "{searchTerm}"</p>}
-            </div>
-        )}
-
+          
+          <ScrollArea className="flex-grow p-4">
+            {filteredAssets.length > 0 ? (
+              <div className="space-y-2">
+                {filteredAssets.map(asset => (
+                  <AssetListItem key={asset.id} asset={asset} onDetailsClick={handleOpenAssetDetails} />
+                ))}
+              </div>
+            ) : (
+              <div className="text-center py-10">
+                <p className="text-lg text-muted-foreground">
+                  {searchTerm || (selectedFolderFilter !== 'all' && selectedFolderFilter !== 'unfiled') 
+                    ? "No assets match your current filters." 
+                    : "No assets or folders found."
+                  }
+                </p>
+                <p className="text-sm text-muted-foreground">
+                    {searchTerm && `Search term: "${searchTerm}"`}
+                    {(!searchTerm && selectedFolderFilter !== 'all' && selectedFolderFilter !== 'unfiled' && filteredAssets.length === 0 && (assetCountsByFolder[selectedFolderFilter] === 0)) && `This folder is empty.`}
+                </p>
+                 {(folders.length === 0 && assets.length === 0 && searchTerm === '' && selectedFolderFilter === 'all') && (
+                    <Button onClick={() => setIsCreateItemTypeDialogOpen(true)} variant="outline" className="mt-4">
+                        <PlusCircle className="mr-2 h-4 w-4" /> Add Your First Item
+                    </Button>
+                 )}
+              </div>
+            )}
+          </ScrollArea>
+        </div>
       </div>
-
 
       {selectedAssetForDetails && (
         <AssetDetailsDialog
@@ -422,3 +463,5 @@ export default function AllAssetsPage() {
     </AppLayout>
   );
 }
+
+        
