@@ -33,7 +33,7 @@ import React from 'react';
 
 const navItems = [
   { href: '/', label: 'Dashboard', icon: LayoutDashboard },
-  { href: '/', label: 'All Assets', icon: FolderKanban }, // Changed href to '/' and removed disabled: true
+  { href: '/', label: 'All Assets', icon: FolderKanban },
   { type: 'separator' as const },
   { href: '/settings/users', label: 'Users & Groups', icon: Users, disabled: true }, // Placeholder
   { href: '/settings', label: 'Settings', icon: Settings },
@@ -64,10 +64,14 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                 <SidebarSeparator key={`sep-${index}`} className="my-2" />
               ) : (
                 item.href && ( // Ensure item.href exists before creating a link
-                  <SidebarMenuItem key={item.href}>
+                  <SidebarMenuItem key={item.label + '-' + item.href}>
                     <Link href={item.href}>
                       <SidebarMenuButton
-                        isActive={pathname === item.href && item.href !== '/' || (pathname === '/' && item.href === '/')} // Ensure active state logic is robust for multiple '/' links
+                        isActive={
+                          item.href === '/' 
+                            ? (pathname === '/' && item.label === 'Dashboard') 
+                            : pathname === item.href
+                        }
                         disabled={item.disabled}
                         tooltip={item.label}
                         aria-label={item.label}
