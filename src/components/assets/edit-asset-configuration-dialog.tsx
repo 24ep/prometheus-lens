@@ -27,6 +27,7 @@ export function EditAssetConfigurationDialog({ asset, isOpen, onOpenChange, onSa
   useEffect(() => {
     if (asset?.configuration) {
       try {
+        // Display the asset's job configuration within a scrape_configs array for context
         setConfigString(JSON.stringify({ scrape_configs: [asset.configuration] }, null, 2));
         setParseError(null);
       } catch (error) {
@@ -44,11 +45,13 @@ export function EditAssetConfigurationDialog({ asset, isOpen, onOpenChange, onSa
     let newConfigObject;
     try {
       const parsedRoot = JSON.parse(configString);
+      // Expecting the user to edit the job definition.
+      // If they provided the full {scrape_configs: [...]} structure, extract the first job.
+      // Otherwise, assume they provided the job object directly.
       if (parsedRoot.scrape_configs && Array.isArray(parsedRoot.scrape_configs) && parsedRoot.scrape_configs.length > 0) {
-        newConfigObject = parsedRoot.scrape_configs[0]; // We store only the first scrape_config object
+        newConfigObject = parsedRoot.scrape_configs[0]; 
       } else {
-         // If it's not in the expected wrapped format, assume the user provided the direct config object
-        newConfigObject = parsedRoot;
+        newConfigObject = parsedRoot; // Assume the input is the job object itself
       }
       setParseError(null);
     } catch (error) {
@@ -63,22 +66,17 @@ export function EditAssetConfigurationDialog({ asset, isOpen, onOpenChange, onSa
     }
 
     onSaveConfiguration(asset.id, newConfigObject);
-    toast({
-      title: "Configuration Updated",
-      description: `Configuration for ${asset.name} saved successfully.`,
-    });
+    // Toast is handled by the calling component now
     onOpenChange(false);
   };
 
   const handleTextChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     setConfigString(e.target.value);
-    // Optionally, clear parse error on type to give user immediate feedback possibility
     if (parseError) {
         try {
             JSON.parse(e.target.value);
             setParseError(null);
         } catch (error) {
-            // Keep existing error or set a new one if it becomes invalid again
             const typedError = error as Error;
             setParseError(`Invalid JSON: ${typedError.message}`);
         }
@@ -91,9 +89,9 @@ export function EditAssetConfigurationDialog({ asset, isOpen, onOpenChange, onSa
         <DialogHeader>
           <DialogTitle className="font-headline text-xl">Edit Configuration: {asset.name}</DialogTitle>
           <DialogDescription>
-            Modify the Prometheus scrape configuration for this asset (JSON format).
-            The top-level key should typically be `scrape_configs` containing an array of job definitions.
-            For simplicity, this editor modifies the first job definition within `scrape_configs`.
+            Modify the Prometheus scrape job definition for this asset (JSON format).
+            This content represents one entry in the <code>scrape_configs</code> array of your <code>prometheus.yml</code>.
+            For context, the editor shows it wrapped in a <code>scrape_configs</code> array, but only the job definition itself is stored for this asset.
           </DialogDescription>
         </DialogHeader>
         
@@ -105,7 +103,7 @@ export function EditAssetConfigurationDialog({ asset, isOpen, onOpenChange, onSa
                 id="configJson"
                 value={configString}
                 onChange={handleTextChange}
-                placeholder={`{\n  "scrape_configs": [\n    {\n      "job_name": "${asset.name.toLowerCase().replace(/\s+/g, '_')}",\n      "static_configs": [\n        {\n          "targets": ["localhost:9100"]\n        }\n      ]\n    }\n  ]\n}`}
+                placeholder={`{\n  "job_name": "${asset.name.toLowerCase().replace(/\s+/g, '_')}",\n  "static_configs": [\n    {\n      "targets": ["localhost:9100"]\n    }\n  ]\n}`}
                 className="min-h-[280px] text-xs font-code resize-none border-0 focus-visible:ring-0 focus-visible:ring-offset-0"
               />
             </ScrollArea>
