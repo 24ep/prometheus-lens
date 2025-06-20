@@ -21,7 +21,6 @@ import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
   LayoutDashboard,
-  // PlusCircle, // Icon removed as "New Asset" link is removed
   Settings,
   Users,
   FolderKanban,
@@ -34,8 +33,7 @@ import React from 'react';
 
 const navItems = [
   { href: '/', label: 'Dashboard', icon: LayoutDashboard },
-  // { href: '/assets/new', label: 'New Asset', icon: PlusCircle }, // Removed: New Asset is now a dialog on dashboard
-  { href: '/assets', label: 'All Assets', icon: FolderKanban, disabled: true }, // Placeholder
+  { href: '/', label: 'All Assets', icon: FolderKanban }, // Changed href to '/' and removed disabled: true
   { type: 'separator' as const },
   { href: '/settings/users', label: 'Users & Groups', icon: Users, disabled: true }, // Placeholder
   { href: '/settings', label: 'Settings', icon: Settings },
@@ -69,7 +67,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                   <SidebarMenuItem key={item.href}>
                     <Link href={item.href}>
                       <SidebarMenuButton
-                        isActive={pathname === item.href}
+                        isActive={pathname === item.href && item.href !== '/' || (pathname === '/' && item.href === '/')} // Ensure active state logic is robust for multiple '/' links
                         disabled={item.disabled}
                         tooltip={item.label}
                         aria-label={item.label}
