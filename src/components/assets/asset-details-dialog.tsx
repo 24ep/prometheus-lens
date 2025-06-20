@@ -131,7 +131,7 @@ export function AssetDetailsDialog({ asset, allFolders, isOpen, onOpenChange, on
               <TabsContent value="overview" className="mt-0 space-y-4">
                 <div className="p-4 rounded-lg border bg-card/50">
                     <h3 className="font-headline text-lg mb-2">Connection Status</h3>
-                    <p>Status: <Badge variant={currentAssetForEdit?.status === 'connected' ? 'default' : currentAssetForEdit?.status === 'error' ? 'destructive' : 'secondary'} className="capitalize">{currentAssetForEdit?.status}</Badge></p>
+                    <div>Status: <Badge variant={currentAssetForEdit?.status === 'connected' ? 'default' : currentAssetForEdit?.status === 'error' ? 'destructive' : 'secondary'} className="capitalize">{currentAssetForEdit?.status}</Badge></div>
                     <p className="mt-1 text-sm text-muted-foreground">Last Checked: {currentAssetForEdit && new Date(currentAssetForEdit.lastChecked).toLocaleString()}</p>
                 </div>
                  <div className="p-4 rounded-lg border bg-card/50">
