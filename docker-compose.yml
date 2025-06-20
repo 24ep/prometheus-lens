@@ -1,0 +1,51 @@
+
+version: '3.8'
+
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "9002:3000" # Expose app on host port 9002, container runs on 3000
+    environment:
+      - NODE_ENV=production
+      - POSTGRES_HOST=db
+      - POSTGRES_PORT=5432
+      - POSTGRES_USER=prometheuslens
+      - POSTGRES_PASSWORD=prometheuslenspass
+      - POSTGRES_DB=prometheuslensdb
+      - DATABASE_URL=postgresql://prometheuslens:prometheuslenspass@db:5432/prometheuslensdb
+      # For NextAuth or other secrets, you would add them here
+      # NEXTAUTH_URL=http://localhost:9002 
+      # NEXTAUTH_SECRET=your_nextauth_secret
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - prometheuslens-net
+
+  db:
+    image: postgres:15-alpine
+    environment:
+      - POSTGRES_USER=prometheuslens
+      - POSTGRES_PASSWORD=prometheuslenspass
+      - POSTGRES_DB=prometheuslensdb
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432" # Optionally expose DB port to host for direct access/debugging
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U prometheuslens -d prometheuslensdb"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - prometheuslens-net
+
+volumes:
+  postgres_data:
+
+networks:
+  prometheuslens-net:
+    driver: bridge

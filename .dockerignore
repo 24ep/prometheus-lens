@@ -1,0 +1,19 @@
+
+node_modules
+.next
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.DS_Store
+.env
+.env*.local
+*.tgz
+# Firebase related files if not used in Docker deployment
+firebase.json
+.firebaserc
+database.rules.json
+storage.rules
+firestore.rules
+firestore.indexes.json
+# App Hosting specific config
+apphosting.yaml
