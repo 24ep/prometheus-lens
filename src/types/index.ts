@@ -1,7 +1,7 @@
 
-export type AssetType = "Server" | "Network" | "Application" | "Database" | "Kubernetes" | "Docker" | "Ubuntu Server" | "Windows Server";
+export type AssetType = "Server" | "Network" | "Application" | "PostgreSQL" | "MySQL" | "MongoDB" | "Kubernetes" | "Docker" | "Ubuntu Server" | "Windows Server";
 
-export const assetTypes: AssetType[] = ["Server", "Network", "Application", "Database", "Kubernetes", "Docker", "Ubuntu Server", "Windows Server"];
+export const assetTypes: AssetType[] = ["Server", "Network", "Application", "PostgreSQL", "MySQL", "MongoDB", "Kubernetes", "Docker", "Ubuntu Server", "Windows Server"];
 
 export interface Asset {
   id: string;
@@ -55,3 +55,4 @@ export interface Group {
   description?: string;
   // permissions could be an array of strings or a more complex object
 }
+

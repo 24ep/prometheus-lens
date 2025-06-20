@@ -56,7 +56,7 @@ export let mockAssetsData: Asset[] = [
   {
     id: 'asset-4',
     name: 'Production PostgreSQL DB',
-    type: 'Database',
+    type: 'PostgreSQL', // Updated from 'Database'
     status: 'connected',
     lastChecked: formatISO(new Date(Date.now() - 1000 * 60 * 1)), // 1 min ago
     grafanaLink: 'https://grafana.example.com/d/ghijkl/prod-db',
@@ -249,3 +249,4 @@ export const getUserById = (userId: string): User | undefined => {
 export const getPermissionById = (permissionId: string): Permission | undefined => {
     return availablePermissions.find(p => p.id === permissionId);
 };
+

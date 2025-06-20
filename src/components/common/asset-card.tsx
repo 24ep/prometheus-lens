@@ -18,7 +18,9 @@ const assetIcons: Record<Asset['type'], React.ElementType> = {
   Server: Server,
   Network: Network,
   Application: AppWindow,
-  Database: Database,
+  PostgreSQL: Database,
+  MySQL: Database,
+  MongoDB: Database,
   Kubernetes: Box,
   Docker: Container,
   "Ubuntu Server": Server,
@@ -99,3 +101,4 @@ export function AssetCard({ asset, onDetailsClick }: AssetCardProps) {
     </Card>
   );
 }
+
