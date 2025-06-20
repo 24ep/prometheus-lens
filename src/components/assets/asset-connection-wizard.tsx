@@ -186,17 +186,20 @@ export function AssetConnectionWizard() {
 
   const onSubmit = (data: FormData) => {
     console.log(data);
+    // In a real app, you would save this data, likely to a backend
+    // For now, we'll just show a toast and potentially redirect or update local state
     toast({
       title: "Asset Configuration Saved!",
       description: `Asset "${data.name}" of type "${data.type}" has been configured.`,
       variant: 'default',
     });
+    // Example: router.push('/'); or update a global state
   };
 
   const handleTestConnection = () => {
     toast({ title: "Testing Connection...", description: "This is a mock test." });
     setTimeout(() => {
-      const success = Math.random() > 0.3;
+      const success = Math.random() > 0.3; // Simulate success/failure
       toast({
         title: success ? "Connection Successful!" : "Connection Failed",
         description: success ? "Prometheus can reach the configured target." : "Could not connect. Check configuration and network.",
@@ -309,7 +312,7 @@ export function AssetConnectionWizard() {
                     View Connection Instructions for {watchedType}
                   </Button>
                 </DialogTrigger>
-                <DialogContent className="sm:max-w-[625px] glassmorphic">
+                <DialogContent className="sm:max-w-[625px]">
                   <DialogHeader>
                     <DialogTitle className="font-headline">Connection Instructions: {watchedType}</DialogTitle>
                     <DialogDescription>

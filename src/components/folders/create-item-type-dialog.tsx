@@ -1,3 +1,4 @@
+
 "use client";
 
 import { Button } from '@/components/ui/button';
@@ -13,7 +14,7 @@ interface CreateItemTypeDialogProps {
 export function CreateItemTypeDialog({ isOpen, onOpenChange, onSelectType }: CreateItemTypeDialogProps) {
   return (
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md glassmorphic">
+      <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle className="font-headline text-xl">Create New Item</DialogTitle>
           <DialogDescription>

@@ -1,3 +1,4 @@
+
 "use client";
 
 import type { Asset } from '@/types';
@@ -56,8 +57,8 @@ export function AssetDetailsDialog({ asset, isOpen, onOpenChange, onSaveTags }: 
 
   return (
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-3xl glassmorphic p-0">
-        <DialogHeader className="p-6 pb-4 border-b border-[hsl(var(--glass-border-light))]">
+      <DialogContent className="sm:max-w-3xl p-0">
+        <DialogHeader className="p-6 pb-4 border-b">
           <div className="flex flex-col sm:flex-row justify-between items-start gap-2">
             <div>
               <DialogTitle className="font-headline text-2xl">{asset.name}</DialogTitle>
@@ -137,7 +138,7 @@ export function AssetDetailsDialog({ asset, isOpen, onOpenChange, onSaveTags }: 
             </div>
           </div>
         </ScrollArea>
-        <DialogFooter className="p-6 pt-4 border-t border-[hsl(var(--glass-border-light))]">
+        <DialogFooter className="p-6 pt-4 border-t">
           <DialogClose asChild>
             <Button type="button" variant="outline">Cancel</Button>
           </DialogClose>

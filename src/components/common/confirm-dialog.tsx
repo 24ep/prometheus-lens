@@ -1,3 +1,4 @@
+
 "use client";
 
 import { Button } from "@/components/ui/button";
@@ -33,7 +34,7 @@ export function ConfirmDialog({
 }: ConfirmDialogProps) {
   return (
     <AlertDialog open={isOpen} onOpenChange={onOpenChange}>
-      <AlertDialogContent className="glassmorphic">
+      <AlertDialogContent>
         <AlertDialogHeader>
           <AlertDialogTitle className="font-headline">{title}</AlertDialogTitle>
           <AlertDialogDescription>
