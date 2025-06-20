@@ -3,7 +3,7 @@
 
 import { AppLayout } from '@/components/layout/app-layout';
 import { AssetListItem } from '@/components/common/asset-list-item';
-import { mockAssetsData, mockFoldersData, addFolder, updateFolder as updateMockFolder, deleteFolder, updateAssetTags } from '@/lib/mock-data';
+import { mockAssetsData, mockFoldersData, addFolder, updateFolder as updateMockFolder, deleteFolder, updateAssetDetails } from '@/lib/mock-data';
 import type { Asset, AssetFolder } from '@/types';
 import { Button } from '@/components/ui/button';
 import { PlusCircle, Filter, Edit2, Trash2, Folder as FolderIcon, ChevronDown, ChevronRight } from 'lucide-react';
@@ -51,52 +51,66 @@ const FolderTreeItem: React.FC<FolderTreeItemProps> = ({
 
   const hasContent = assetsInFolder.length > 0 || childFolders.length > 0;
 
+  // Update isOpen if initiallyOpen prop changes (e.g. due to filter selection)
+  useEffect(() => {
+    setIsOpen(initiallyOpen);
+  }, [initiallyOpen]);
+
   return (
-    <div style={{ paddingLeft: `${level * 1.5}rem` }} className="my-1">
-      <div className="flex justify-between items-center py-2 px-2 rounded-md hover:bg-muted/60 group">
-        <div className="flex items-center gap-1.5 flex-grow min-w-0" onClick={() => hasContent && setIsOpen(!isOpen)} role="button" tabIndex={0} onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && hasContent && setIsOpen(!isOpen)} >
+    <div style={{ paddingLeft: level > 0 ? `${level * 1.5}rem` : '0' }} className="my-0.5">
+      <div className="flex justify-between items-center py-1.5 px-2 rounded-md hover:bg-muted/60 group">
+        <div 
+            className="flex items-center gap-1.5 flex-grow min-w-0 cursor-pointer" 
+            onClick={() => hasContent && setIsOpen(!isOpen)} 
+            role="button" 
+            tabIndex={0} 
+            onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && hasContent && setIsOpen(!isOpen)} 
+        >
           {hasContent ? (
-            isOpen ? <ChevronDown className="h-4 w-4 shrink-0" /> : <ChevronRight className="h-4 w-4 shrink-0" />
+            isOpen ? <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground" /> : <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" />
           ) : (
-            <div className="w-4 h-4 shrink-0"></div> // Placeholder for alignment
+            <div className="w-4 h-4 shrink-0"></div> 
           )}
           <FolderIcon className="h-5 w-5 text-primary shrink-0" />
-          <span className="font-headline font-medium text-lg truncate" title={folder.name}>{folder.name}</span>
-          <span className="text-sm text-muted-foreground ml-1">({assetsInFolder.length})</span>
+          <span className="font-headline font-medium text-base truncate" title={folder.name}>{folder.name}</span>
+          <span className="text-xs text-muted-foreground ml-1">({assetsInFolder.length})</span>
         </div>
-        <div className="flex gap-1 shrink-0 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity">
-          <Button variant="ghost" size="icon" onClick={() => onEditFolder(folder)} aria-label={`Edit folder ${folder.name}`}>
-            <Edit2 className="h-4 w-4 text-muted-foreground hover:text-primary" />
+        <div className="flex gap-0.5 shrink-0 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity">
+          <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => onEditFolder(folder)} aria-label={`Edit folder ${folder.name}`}>
+            <Edit2 className="h-3.5 w-3.5 text-muted-foreground hover:text-primary" />
           </Button>
-          <Button variant="ghost" size="icon" onClick={() => onDeleteFolder(folder)} aria-label={`Delete folder ${folder.name}`}>
-            <Trash2 className="h-4 w-4 text-muted-foreground hover:text-destructive" />
+          <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => onDeleteFolder(folder)} aria-label={`Delete folder ${folder.name}`}>
+            <Trash2 className="h-3.5 w-3.5 text-muted-foreground hover:text-destructive" />
           </Button>
         </div>
       </div>
       {isOpen && (
-        <div className="mt-1 border-l-2 border-muted pl-3 ml-[7px]"> {/* Indent content under folder icon */}
+        <div className="mt-0.5 border-l-2 border-muted/70 pl-2.5 ml-[calc(0.5rem+7px)]"> {/* Indent content under folder icon, adjust ml */}
           {childFolders.map(child => (
             <FolderTreeItem
               key={child.id}
               folder={child}
               allFolders={allFolders}
-              level={0} // Child folders are visually indented, level 0 for their own asset/subfolder block
-              assetsInFolder={allFolders.flatMap(f => f.parentId === child.id ? [] : mockAssetsData.filter(a => a.folderId === child.id))} // simplification
+              level={0} 
+              assetsInFolder={filteredAssets.filter(a => a.folderId === child.id)}
               onEditFolder={onEditFolder}
               onDeleteFolder={onDeleteFolder}
               onAssetDetailsClick={onAssetDetailsClick}
-              initiallyOpen={false}
+              initiallyOpen={false} // Child folders open based on their own state or interaction
             />
           ))}
           {assetsInFolder.length > 0 && (
-            <div className="space-y-1.5 py-1">
+            <div className="space-y-1 py-1">
               {assetsInFolder.map(asset => (
                 <AssetListItem key={asset.id} asset={asset} onDetailsClick={onAssetDetailsClick} />
               ))}
             </div>
           )}
-           {assetsInFolder.length === 0 && childFolders.length === 0 && (
-             <p className="text-xs text-muted-foreground py-1 px-2 italic">This folder is empty or assets are filtered.</p>
+           {assetsInFolder.length === 0 && childFolders.length === 0 && hasContent && ( // Only show if folder was supposed to have content but is now empty due to filters
+             <p className="text-xs text-muted-foreground py-1 px-2 italic">No items match current filters in this folder.</p>
+           )}
+           {!hasContent && (
+             <p className="text-xs text-muted-foreground py-1 px-2 italic">This folder is empty.</p>
            )}
         </div>
       )}
@@ -124,8 +138,8 @@ export default function AllAssetsPage() {
   const [isAssetWizardOpen, setIsAssetWizardOpen] = useState(false);
 
   const refreshData = useCallback(() => {
-    setAssets([...mockAssetsData]); // Creates a new array reference
-    setFolders([...mockFoldersData].sort((a, b) => a.name.localeCompare(b.name))); // New sorted array
+    setAssets([...mockAssetsData]); 
+    setFolders([...mockFoldersData].sort((a, b) => a.name.localeCompare(b.name))); 
   }, []);
 
 
@@ -169,9 +183,9 @@ export default function AllAssetsPage() {
     setIsAssetDetailsDialogOpen(true);
   };
 
-  const handleSaveAssetTags = (assetId: string, newTags: string[]) => {
-    updateAssetTags(assetId, newTags);
-    refreshData(); // Full refresh to ensure UI updates
+  const handleSaveAssetDetails = (assetId: string, details: { tags: string[], grafanaLink?: string }) => {
+    updateAssetDetails(assetId, details);
+    refreshData(); 
     if (selectedAssetForDetails && selectedAssetForDetails.id === assetId) {
        const updatedAssetFromMock = mockAssetsData.find(a => a.id === assetId);
        if (updatedAssetFromMock) setSelectedAssetForDetails(updatedAssetFromMock);
@@ -179,7 +193,6 @@ export default function AllAssetsPage() {
   };
 
   const handleAssetConfigurationSave = (updatedAssetFromDialog: Asset) => {
-    // The mockdata function already updates the array. We just need to refresh.
     refreshData();
     if (selectedAssetForDetails && selectedAssetForDetails.id === updatedAssetFromDialog.id) {
        setSelectedAssetForDetails(updatedAssetFromDialog);
@@ -232,7 +245,7 @@ export default function AllAssetsPage() {
 
   const confirmDeleteFolder = () => {
     if (folderToDelete) {
-      const success = deleteFolder(folderToDelete.id); // This also unassigns assets
+      const success = deleteFolder(folderToDelete.id); 
       if (success) {
         toast({ title: "Folder Deleted", description: `Folder "${folderToDelete.name}" removed.`});
         if (selectedFolderFilter === folderToDelete.id) {
@@ -247,18 +260,14 @@ export default function AllAssetsPage() {
     setFolderToDelete(null);
   };
   
-  const shouldDisplayFolder = (folder: AssetFolder): boolean => {
-    if (selectedFolderFilter === 'all') return true;
-    if (selectedFolderFilter === 'unfiled') return false; // Don't show any folders if filtering for uncategorized
-    // If a specific folder is selected, show it and its ancestors/descendants
-    // This logic can be complex for a perfect "show only this branch"
-    // For simplicity, we'll show all folders if a specific folder is selected,
-    // but assets will be filtered. A better approach might be to only render the selected branch.
-    // For now, if a folder filter is active, we still render the whole tree structure,
-    // but assets are filtered.
-    return true; 
-  };
-
+  const isFolderOrDescendantSelected = useCallback((folderId: string, selectedFilterId: string, allFolders: AssetFolder[]): boolean => {
+    if (folderId === selectedFilterId) return true;
+    const children = allFolders.filter(f => f.parentId === folderId);
+    for (const child of children) {
+        if (isFolderOrDescendantSelected(child.id, selectedFilterId, allFolders)) return true;
+    }
+    return false;
+  }, []);
 
   return (
     <AppLayout>
@@ -288,7 +297,7 @@ export default function AllAssetsPage() {
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">All Folders & Assets</SelectItem>
-              {folders.filter(f => !f.parentId).sort((a,b) => a.name.localeCompare(b.name)).map(folder => ( // Only root folders in dropdown for simplicity
+              {folders.filter(f => !f.parentId).sort((a,b) => a.name.localeCompare(b.name)).map(folder => ( 
                 <SelectItem key={folder.id} value={folder.id}>{folder.name}</SelectItem>
               ))}
               <SelectItem value="unfiled">Uncategorized Assets</SelectItem>
@@ -297,36 +306,30 @@ export default function AllAssetsPage() {
         </div>
       </div>
       
-      {folders.length === 0 && uncategorizedAssets.length === 0 && searchTerm === '' && (
+      {(folders.length === 0 && uncategorizedAssets.length === 0 && searchTerm === '') && (
         <div className="text-center py-10">
           <p className="text-xl text-muted-foreground font-semibold">No assets or folders found.</p>
           <p className="text-muted-foreground">Try adding a new item.</p>
         </div>
       )}
 
-      <div className="space-y-2">
+      <div className="space-y-1"> {/* Reduced space-y for tighter tree */}
         {rootFolders.map(folder => {
-            if (!shouldDisplayFolder(folder) && selectedFolderFilter !== 'all') return null;
-             const assetsForThisFolderAndSubfolders = filteredAssets.filter(asset => {
-                if (!asset.folderId) return false;
-                if (selectedFolderFilter === 'all' || selectedFolderFilter === 'unfiled') {
-                     // Handled by getFolderAndSubFolderIds in filteredAssets if specific folder selected
-                    return asset.folderId === folder.id || folders.find(f => f.id === asset.folderId)?.parentId === folder.id; // Basic check
+           if (selectedFolderFilter !== 'all' && selectedFolderFilter !== 'unfiled' && !isFolderOrDescendantSelected(folder.id, selectedFolderFilter, folders) && !folders.find(f => f.id === selectedFolderFilter)?.parentId === folder.id) {
+             // If a specific folder filter is active, only show the branch containing that folder or if it's a direct child for context
+             let show = false;
+             let current = folders.find(f => f.id === selectedFolderFilter);
+             while(current) {
+                if (current.id === folder.id) {
+                    show = true;
+                    break;
                 }
-                const folderIdsToMatch = getFolderAndSubFolderIds(selectedFolderFilter, folders);
-                return folderIdsToMatch.includes(asset.folderId || "");
-            });
-            const assetsDirectlyInFolder = filteredAssets.filter(a => a.folderId === folder.id);
-
-            if (selectedFolderFilter !== 'all' && selectedFolderFilter !== 'unfiled' && folder.id !== selectedFolderFilter && !getFolderAndSubFolderIds(selectedFolderFilter, folders).includes(folder.id) ) {
-                 // If filtering by a specific folder, only show that folder's tree or if this folder is an ancestor/descendant
-                 // This logic can be tricky. For now, let's ensure if specific folder is selected, we only show its branch.
-                 // This means we might need to adjust how rootFolders are iterated or how FolderTreeItem decides to render.
-                 // For now, if a folder is selected, and this is not it or its parent, don't render.
-                 // This is an approximation and might hide unrelated root folders.
-                 // A better way would be for FolderTreeItem to know if it's part of the selected branch.
-            }
-
+                current = current.parentId ? folders.find(f => f.id === current!.parentId) : undefined;
+             }
+             if (!show && !(folders.find(f => f.id === selectedFolderFilter)?.parentId === folder.id)) return null;
+           }
+           
+           const assetsDirectlyInFolder = filteredAssets.filter(a => a.folderId === folder.id);
 
            return (
             <FolderTreeItem
@@ -338,20 +341,20 @@ export default function AllAssetsPage() {
               onEditFolder={handleEditFolder}
               onDeleteFolder={handleDeleteFolder}
               onAssetDetailsClick={handleOpenAssetDetails}
-              initiallyOpen={selectedFolderFilter === folder.id || selectedFolderFilter === 'all'}
+              initiallyOpen={selectedFolderFilter === 'all' || folder.id === selectedFolderFilter || (selectedFolderFilter !== 'unfiled' && isFolderOrDescendantSelected(folder.id, selectedFolderFilter, folders))}
             />
            );
         })}
 
         {uncategorizedAssets.length > 0 && (selectedFolderFilter === 'all' || selectedFolderFilter === 'unfiled') && (
-          <div className="mt-4">
-            <div className="flex justify-between items-center mb-2 py-2 px-2 rounded-md">
+          <div className="mt-3 pt-2 border-t border-dashed">
+            <div className="flex justify-between items-center mb-1 py-1.5 px-2 rounded-md">
               <div className="flex items-center gap-2">
-                 <FolderIcon className="h-5 w-5 text-muted-foreground" />
-                <h2 className="font-headline font-medium text-lg text-muted-foreground">Uncategorized Assets ({uncategorizedAssets.length})</h2>
+                 <FolderIcon className="h-5 w-5 text-muted-foreground/80" />
+                <h2 className="font-headline font-medium text-base text-muted-foreground">Uncategorized Assets ({uncategorizedAssets.length})</h2>
               </div>
             </div>
-            <div className="space-y-1.5 pl-4 ml-[7px] border-l-2 border-transparent"> {/* Align with folder content */}
+            <div className="space-y-1 pl-3 ml-[calc(0.5rem+7px)] border-l-2 border-transparent">
               {uncategorizedAssets.map(asset => (
                 <AssetListItem key={asset.id} asset={asset} onDetailsClick={handleOpenAssetDetails} />
               ))}
@@ -359,9 +362,10 @@ export default function AllAssetsPage() {
           </div>
         )}
         
-        {filteredAssets.length === 0 && searchTerm !== '' && (
+        {filteredAssets.length === 0 && (searchTerm !== '' || (selectedFolderFilter !== 'all' && selectedFolderFilter !== 'unfiled' && rootFolders.every(folder => !isFolderOrDescendantSelected(folder.id, selectedFolderFilter, folders)) && uncategorizedAssets.length === 0) ) && (
             <div className="text-center py-10">
-            <p className="text-lg text-muted-foreground">No assets found matching your search term "{searchTerm}".</p>
+            <p className="text-lg text-muted-foreground">No assets found matching your current filters.</p>
+            {searchTerm && <p className="text-sm text-muted-foreground">Search term: "{searchTerm}"</p>}
             </div>
         )}
 
@@ -374,7 +378,7 @@ export default function AllAssetsPage() {
           allFolders={folders}
           isOpen={isAssetDetailsDialogOpen}
           onOpenChange={setIsAssetDetailsDialogOpen}
-          onSaveTags={handleSaveAssetTags}
+          onSaveDetails={handleSaveAssetDetails}
           onConfigurationSave={handleAssetConfigurationSave}
         />
       )}

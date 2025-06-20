@@ -39,6 +39,7 @@ export let mockAssetsData: Asset[] = [
     type: 'Application',
     status: 'disconnected',
     lastChecked: formatISO(new Date(Date.now() - 1000 * 60 * 60 * 2)), // 2 hours ago
+    grafanaLink: 'https://grafana.example.com/d/beta-api/beta-api-gateway',
     configuration: { job_name: 'beta_api', static_configs: [{ targets: ['beta-api-instance:8080']}]},
     tags: ['api', 'nodejs', 'staging'],
     folderId: 'folder-2',
@@ -56,7 +57,7 @@ export let mockAssetsData: Asset[] = [
   {
     id: 'asset-4',
     name: 'Production PostgreSQL DB',
-    type: 'PostgreSQL', // Updated from 'Database'
+    type: 'PostgreSQL',
     status: 'connected',
     lastChecked: formatISO(new Date(Date.now() - 1000 * 60 * 1)), // 1 min ago
     grafanaLink: 'https://grafana.example.com/d/ghijkl/prod-db',
@@ -70,16 +71,18 @@ export let mockAssetsData: Asset[] = [
     type: 'Kubernetes',
     status: 'pending',
     lastChecked: formatISO(new Date(Date.now() - 1000 * 60 * 30)), // 30 mins ago
+    grafanaLink: '', // No link initially
     configuration: { job_name: 'staging_k8s', kubernetes_sd_configs: [{ api_server: 'https://k8s.staging.example.com', role: 'node'}] },
     tags: ['k8s', 'staging', 'microservices'],
     folderId: 'folder-2',
   },
   {
     id: 'asset-6',
-    name: 'Legacy App Server',
+    name: 'Legacy App Server (Uncategorized)',
     type: 'Server',
     status: 'connected',
     lastChecked: formatISO(new Date(Date.now() - 1000 * 60 * 120)), // 120 mins ago
+    grafanaLink: 'https://grafana.example.com/d/legacy/legacy-app',
     configuration: { job_name: 'legacy_app', static_configs: [{ targets: ['legacy-app:8000']}]},
     tags: ['java', 'tomcat'],
   },
@@ -130,18 +133,27 @@ export const deleteFolder = (folderId: string): boolean => {
   return true;
 };
 
-// Asset Tag Management
-export const updateAssetTags = (assetId: string, newTags: string[]): Asset | undefined => {
+
+// Asset Detail Management (Tags, Grafana Link, etc.)
+export const updateAssetDetails = (assetId: string, details: { tags?: string[], grafanaLink?: string }): Asset | undefined => {
   let updatedAsset: Asset | undefined;
   mockAssetsData = mockAssetsData.map(asset => {
     if (asset.id === assetId) {
-      updatedAsset = { ...asset, tags: newTags.sort() }; // Keep tags sorted for consistency
+      const newDetails: Partial<Asset> = {};
+      if (details.tags !== undefined) {
+        newDetails.tags = details.tags.sort();
+      }
+      if (details.grafanaLink !== undefined) {
+        newDetails.grafanaLink = details.grafanaLink;
+      }
+      updatedAsset = { ...asset, ...newDetails };
       return updatedAsset;
     }
     return asset;
   });
   return updatedAsset;
 };
+
 
 // Asset Configuration Management
 export const updateAssetConfiguration = (assetId: string, newConfiguration: Record<string, any>): Asset | undefined => {
@@ -250,3 +262,15 @@ export const getPermissionById = (permissionId: string): Permission | undefined 
     return availablePermissions.find(p => p.id === permissionId);
 };
 
+// Asset Tag Management - Kept for now, but updateAssetDetails is more generic
+export const updateAssetTags = (assetId: string, newTags: string[]): Asset | undefined => {
+  let updatedAsset: Asset | undefined;
+  mockAssetsData = mockAssetsData.map(asset => {
+    if (asset.id === assetId) {
+      updatedAsset = { ...asset, tags: newTags.sort() }; // Keep tags sorted for consistency
+      return updatedAsset;
+    }
+    return asset;
+  });
+  return updatedAsset;
+};

@@ -10,7 +10,7 @@ import { Label } from '@/components/ui/label';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter, DialogClose } from '@/components/ui/dialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { ExternalLink, X, PlusCircle, Edit, Settings2, Info, Tag, ListChecks, FileText, Download } from 'lucide-react';
+import { ExternalLink, X, PlusCircle, Edit, Settings2, Info, Tag, ListChecks, FileText, Download, LinkIcon } from 'lucide-react';
 import React, { useState, useEffect } from 'react';
 import { useToast } from '@/hooks/use-toast';
 import { getMockInstructions } from '@/lib/asset-utils';
@@ -22,14 +22,15 @@ interface AssetDetailsDialogProps {
   allFolders: AssetFolder[];
   isOpen: boolean;
   onOpenChange: (isOpen: boolean) => void;
-  onSaveTags: (assetId: string, tags: string[]) => void;
+  onSaveDetails: (assetId: string, details: { tags: string[], grafanaLink?: string }) => void;
   onConfigurationSave: (updatedAsset: Asset) => void;
 }
 
-export function AssetDetailsDialog({ asset, allFolders, isOpen, onOpenChange, onSaveTags, onConfigurationSave }: AssetDetailsDialogProps) {
+export function AssetDetailsDialog({ asset, allFolders, isOpen, onOpenChange, onSaveDetails, onConfigurationSave }: AssetDetailsDialogProps) {
   const { toast } = useToast();
   const [currentTags, setCurrentTags] = useState<string[]>([]);
   const [tagInput, setTagInput] = useState('');
+  const [grafanaLinkInput, setGrafanaLinkInput] = useState('');
   const [isEditConfigOpen, setIsEditConfigOpen] = useState(false);
   const [currentAssetForEdit, setCurrentAssetForEdit] = useState<Asset | null>(null);
 
@@ -37,11 +38,13 @@ export function AssetDetailsDialog({ asset, allFolders, isOpen, onOpenChange, on
     if (asset) {
       setCurrentAssetForEdit(asset);
       setCurrentTags(asset.tags ? [...asset.tags] : []);
+      setGrafanaLinkInput(asset.grafanaLink || '');
     } else {
       setCurrentTags([]);
+      setGrafanaLinkInput('');
       setCurrentAssetForEdit(null);
     }
-    setTagInput('');
+    setTagInput(''); // Always reset tag input on open/asset change
   }, [asset, isOpen]);
 
   if (!asset) return null;
@@ -62,9 +65,11 @@ export function AssetDetailsDialog({ asset, allFolders, isOpen, onOpenChange, on
     setCurrentTags(prev => prev.filter(tag => tag !== tagToRemove));
   };
 
-  const handleSaveTagsLocal = () => {
-    onSaveTags(asset.id, currentTags);
-    toast({ title: "Tags Updated", description: `Tags for ${asset.name} saved.` });
+  const handleSaveDetailsLocal = () => {
+    onSaveDetails(asset.id, { tags: currentTags, grafanaLink: grafanaLinkInput.trim() });
+    toast({ title: "Details Updated", description: `Details for ${asset.name} saved.` });
+    // Optionally close dialog or indicate save. For now, just toast.
+    // onOpenChange(false); // Could close dialog on save
   };
 
   const handleOpenEditConfig = () => {
@@ -74,8 +79,9 @@ export function AssetDetailsDialog({ asset, allFolders, isOpen, onOpenChange, on
   const handleSaveConfiguration = (assetId: string, newConfiguration: Record<string, any>) => {
     const updatedAsset = updateAssetConfiguration(assetId, newConfiguration);
     if (updatedAsset) {
-      setCurrentAssetForEdit(updatedAsset); // Ensure currentAssetForEdit in this dialog is updated
-      onConfigurationSave(updatedAsset); // Propagate to parent (page.tsx)
+      setCurrentAssetForEdit(updatedAsset); 
+      onConfigurationSave(updatedAsset); 
+      setGrafanaLinkInput(updatedAsset.grafanaLink || ''); // Re-sync Grafana link if asset is updated
       toast({ title: "Configuration Saved", description: `Configuration for ${updatedAsset.name} has been updated.` });
     } else {
       toast({ title: "Error", description: "Failed to save configuration.", variant: "destructive" });
@@ -115,14 +121,13 @@ export function AssetDetailsDialog({ asset, allFolders, isOpen, onOpenChange, on
                 <DialogDescription className="text-base">{currentAssetForEdit?.type} Asset</DialogDescription>
               </div>
               <div className="flex gap-2 mt-2 sm:mt-0">
-                {currentAssetForEdit?.grafanaLink && (
+                {currentAssetForEdit?.grafanaLink ? (
                   <a href={currentAssetForEdit.grafanaLink} target="_blank" rel="noopener noreferrer">
                     <Button size="sm"><ExternalLink className="mr-2 h-4 w-4" />Open in Grafana</Button>
                   </a>
+                ) : (
+                   <Button size="sm" disabled><ExternalLink className="mr-2 h-4 w-4" />Grafana N/A</Button>
                 )}
-                 {!currentAssetForEdit?.grafanaLink && (
-                    <Button size="sm" disabled><ExternalLink className="mr-2 h-4 w-4" />Grafana N/A</Button>
-                 )}
               </div>
             </div>
           </DialogHeader>
@@ -136,7 +141,7 @@ export function AssetDetailsDialog({ asset, allFolders, isOpen, onOpenChange, on
                 <Settings2 className="mr-2 h-4 w-4" /> Configuration
               </TabsTrigger>
               <TabsTrigger value="metadata" className="justify-start px-3 py-2 text-sm data-[state=active]:bg-background data-[state=active]:shadow-sm">
-                <ListChecks className="mr-2 h-4 w-4" /> Metadata
+                <ListChecks className="mr-2 h-4 w-4" /> Details & Links
               </TabsTrigger>
               <TabsTrigger value="tags" className="justify-start px-3 py-2 text-sm data-[state=active]:bg-background data-[state=active]:shadow-sm">
                 <Tag className="mr-2 h-4 w-4" /> Tags
@@ -184,12 +189,26 @@ export function AssetDetailsDialog({ asset, allFolders, isOpen, onOpenChange, on
 
               <TabsContent value="metadata" className="mt-0 space-y-4">
                  <div className="p-4 rounded-lg border bg-card/50">
-                    <h3 className="font-headline text-lg mb-3">Details</h3>
+                    <h3 className="font-headline text-lg mb-3">Asset Details</h3>
                     <div className="space-y-1.5 text-sm">
                         <p><strong>ID:</strong> <span className="text-muted-foreground">{asset.id}</span></p>
                         <p><strong>Type:</strong> <span className="text-muted-foreground">{asset.type}</span></p>
                         <p><strong>Folder:</strong> <span className="text-muted-foreground">{folderName || 'Uncategorized'}</span></p>
                     </div>
+                </div>
+                <div className="p-4 rounded-lg border bg-card/50">
+                    <h3 className="font-headline text-lg mb-2">Grafana Link</h3>
+                    <div className="flex items-center gap-2">
+                        <LinkIcon className="h-4 w-4 text-muted-foreground" />
+                        <Input 
+                            id="grafanaLink"
+                            value={grafanaLinkInput}
+                            onChange={(e) => setGrafanaLinkInput(e.target.value)}
+                            placeholder="https://grafana.example.com/d/..."
+                            className="text-sm"
+                        />
+                    </div>
+                     <p className="text-xs text-muted-foreground mt-1.5">Enter the full URL to the Grafana dashboard for this asset. Click 'Save Details' to persist.</p>
                 </div>
               </TabsContent>
 
@@ -219,7 +238,7 @@ export function AssetDetailsDialog({ asset, allFolders, isOpen, onOpenChange, on
                       <PlusCircle className="h-4 w-4" />
                     </Button>
                   </div>
-                  <p className="text-xs text-muted-foreground mt-1.5">Press Enter or click '+' to add. Click 'Save Tags' below to persist changes.</p>
+                  <p className="text-xs text-muted-foreground mt-1.5">Press Enter or click '+' to add. Click 'Save Details' below to persist changes.</p>
                 </div>
               </TabsContent>
 
@@ -246,7 +265,7 @@ export function AssetDetailsDialog({ asset, allFolders, isOpen, onOpenChange, on
             <DialogClose asChild>
               <Button type="button" variant="outline">Close</Button>
             </DialogClose>
-            <Button type="button" onClick={handleSaveTagsLocal}>Save Tags</Button>
+            <Button type="button" onClick={handleSaveDetailsLocal}>Save Details</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
