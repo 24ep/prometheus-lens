@@ -3,7 +3,7 @@ import type { AssetType, FormData } from '@/types'; // Assuming FormData might b
 
 export const assetTypeConfigPlaceholders: Record<AssetType, { param1: string, param2: string }> = {
   Server: { param1: 'Server IP Address (e.g., 192.168.1.100)', param2: 'Node Exporter Port (e.g., 9100)' },
-  Network: { param1: 'Device IP / Hostname', param2: 'SNMP Community String (for SNMP Exporter)' },
+  Network: { param1: 'Device IP / Hostname', param2: 'SNMP Module (e.g., if_mib)' },
   Application: { param1: 'Metrics Endpoint URL (e.g., http://app/metrics)', param2: 'Application Port (optional, if not in URL)' },
   PostgreSQL: { param1: 'Database Host Address (e.g., db.example.com)', param2: 'Exporter Port (e.g., 9187 for postgres_exporter)' },
   MySQL: { param1: 'Database Host Address (e.g., mysql.example.com)', param2: 'Exporter Port (e.g., 9104 for mysqld_exporter)' },
@@ -36,42 +36,33 @@ export const getMockPrometheusConfig = (data: ConfigGenerationParams): string =>
       scrapeConfigBody = `
     static_configs:
       - targets: ['${targets}']`;
-      if (data.config_param2) { // If port is given separately for app, implies non-standard metrics URL maybe?
+      if (data.config_param2) { 
         scrapeConfigBody += ` # Note: Port ${data.config_param2} provided, ensure it's part of the target URL if needed.`;
       }
       break;
     case 'Kubernetes':
       scrapeConfigBody = `
     kubernetes_sd_configs:
-      - role: pod # Example role, adjust as needed (node, service, endpoints, ingress)
+      - role: pod 
         api_server: ${data.config_param1 ? `'${data.config_param1}'` : 'YOUR_K8S_API_SERVER_URL'}
         ${data.config_param2 ? `bearer_token_file: '${data.config_param2}'`: '# bearer_token_file: /var/run/secrets/kubernetes.io/serviceaccount/token (if in-cluster)'}
-        # namespace: default # Optional: specify namespace
     relabel_configs:
       - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_scrape]
         action: keep
         regex: true
       - source_labels: [__meta_kubernetes_pod_container_port_name]
         action: keep
-        regex: metrics # Or your specific metrics port name
-      # Add more relabel_configs as needed
-      # Example: discover pods in a specific namespace
-      # - source_labels: [__meta_kubernetes_namespace]
-      #   action: keep
-      #   regex: my-namespace
-      # Example: relabel labels for better metric organization
-      # - source_labels: [__meta_kubernetes_pod_label_app]
-      #   target_label: app`;
+        regex: metrics`;
       break;
     case 'Server':
     case 'Ubuntu Server':
-      port = port || '9100'; // Default Node Exporter port
+      port = port || '9100'; 
       scrapeConfigBody = `
     static_configs:
       - targets: ['${targets}:${port}']`;
       break;
     case 'Windows Server':
-      port = port || '9182'; // Default Windows Exporter port
+      port = port || '9182'; 
       scrapeConfigBody = `
     static_configs:
       - targets: ['${targets}:${port}']`;
@@ -85,26 +76,22 @@ export const getMockPrometheusConfig = (data: ConfigGenerationParams): string =>
     metrics_path: ${metricsPath}`;
       break;
     case 'PostgreSQL':
-      port = port || '9187'; // Default postgres_exporter port
+      port = port || '9187'; 
       scrapeConfigBody = `
     static_configs:
       - targets: ['${targets}:${port}']`;
       break;
     case 'MySQL':
-      port = port || '9104'; // Default mysqld_exporter port
+      port = port || '9104'; 
       scrapeConfigBody = `
     static_configs:
       - targets: ['${targets}:${port}']`;
       break;
     case 'MongoDB':
-      port = port || '9216'; // Default mongodb_exporter port
+      port = port || '9216'; 
       scrapeConfigBody = `
-    # Note: For MongoDB, the target is often the exporter itself.
-    # The MongoDB URI (param1) is used by the exporter to connect to the DB.
-    # Ensure param1 is the MongoDB URI, and param2 is the exporter port.
-    # The target for Prometheus to scrape is ${targets}:${port} (the exporter).
     static_configs:
-      - targets: ['${targets}:${port}']`; // Targets the exporter
+      - targets: ['${targets}:${port}']`; 
       break;
     case 'Network': 
       targets = data.config_param1 || 'NETWORK_DEVICE_IP_OR_HOSTNAME';
@@ -115,20 +102,16 @@ export const getMockPrometheusConfig = (data: ConfigGenerationParams): string =>
     params:
       module: ['${snmpModule}']
     metrics_path: /snmp
-    # This job targets the SNMP Exporter. The 'targets' above are passed to it.
-    # Ensure __address__ below is replaced by your SNMP exporter's actual address.
     relabel_configs:
       - source_labels: [__address__]
         target_label: __param_target
       - source_labels: [__param_target]
         target_label: instance
       - target_label: __address__
-        replacement: snmp-exporter.example.com:9116 # <-- REPLACE THIS with your SNMP Exporter's host:port`;
+        replacement: snmp-exporter.example.com:9116`;
       break;
     default:
       scrapeConfigBody = `
-    # Configuration for ${data.type} type is generic.
-    # Please adapt based on the specific exporter or metrics endpoint.
     static_configs:
       - targets: ['${targets}${port ? `:${port}` : ''}']`;
       break;
@@ -136,21 +119,15 @@ export const getMockPrometheusConfig = (data: ConfigGenerationParams): string =>
 
   return `scrape_configs:
   - job_name: '${jobName}'
-    # scrape_interval: 15s (default, can be overridden)
-    # scrape_timeout: 10s (default, can be overridden)
-    # metrics_path: /metrics (default, can be overridden unless specified below)
-    # scheme: http (default, can be https)
 ${scrapeConfigBody}
 `;
 };
 
 const formatInstructionStep = (step: string): string => {
-    // Enhanced styling for <pre> blocks
     let formattedStep = step.replace(
         /```yaml\n([\s\S]*?)\n```/g,
         '<pre class="bg-slate-100 dark:bg-slate-800 p-3 rounded-lg text-xs font-code my-2 whitespace-pre-wrap border border-slate-200 dark:border-slate-700 shadow-sm">$1</pre>'
     );
-    // Enhanced styling for inline <code>
     formattedStep = formattedStep.replace(
         /`([^`]+)`/g,
         '<code class="bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 rounded text-xs font-code text-pink-600 dark:text-pink-400">$1</code>'
@@ -166,238 +143,217 @@ export const getMockInstructions = (type?: AssetType): string[] => {
   } else {
     switch (type) {
       case 'Server': 
-        rawInstructions = [
-          "Install Node Exporter:",
-          "   - Download the latest Node Exporter for your OS from `https://prometheus.io/download/#node_exporter`.",
-          "   - Extract and run it. For Linux, consider creating a systemd service for persistence.",
-          "   - Example systemd service (`/etc/systemd/system/node_exporter.service`):",
-          "     ```yaml\n     [Unit]\n     Description=Node Exporter\n     Wants=network-online.target\n     After=network-online.target\n\n     [Service]\n     User=node_exporter\n     Group=node_exporter\n     Type=simple\n     ExecStart=/usr/local/bin/node_exporter\n\n     [Install]\n     WantedBy=multi-user.target\n     ```",
-          "   - Then, create user (if not exists): `sudo useradd -rs /bin/false node_exporter`",
-          "   - Reload systemd: `sudo systemctl daemon-reload`",
-          "   - Enable and start: `sudo systemctl enable --now node_exporter`",
-          "Firewall Configuration:",
-          "   - Ensure port (default `9100`) is open on your server's firewall.",
-          "   - Example for `ufw` (Ubuntu): `sudo ufw allow 9100/tcp`",
-          "   - For cloud providers, adjust security group/firewall rules accordingly.",
-          "Verify Metrics Endpoint:",
-          "   - Access `http://<server_ip>:9100/metrics` in a browser or use `curl http://<server_ip>:9100/metrics`.",
-          "   - You should see a page full of Prometheus metrics.",
-          "Prometheus Configuration:",
-          "   - Add the generated YAML snippet to your `prometheus.yml` file under the `scrape_configs:` section.",
-          "Reload Prometheus Configuration:",
-          "   - `curl -X POST http://<prometheus_host>:9090/-/reload` or send a `SIGHUP` signal to the Prometheus process."
-        ];
-        break;
       case 'Ubuntu Server':
         rawInstructions = [
-          "Install Node Exporter:",
-          "   - **Option A (Package Manager):** `sudo apt update && sudo apt install prometheus-node-exporter -y`",
-          "     - If installed this way: `sudo systemctl start prometheus-node-exporter` and `sudo systemctl enable prometheus-node-exporter`",
-          "   - **Option B (Binary):** Follow the binary installation steps for 'Server' (download, systemd service).",
-          "Firewall (UFW):",
-          "   - Allow Node Exporter port (default `9100`): `sudo ufw allow 9100/tcp`",
-          "Verify Metrics:",
-          "   - Check `http://<ubuntu_server_ip>:9100/metrics`.",
-          "Prometheus Configuration:",
-          "   - Add the generated YAML to your `prometheus.yml`.",
-          "Reload Prometheus:",
-          "   - `curl -X POST http://<prometheus_host>:9090/-/reload`."
+          "Download Node Exporter:",
+          "   - Go to `https://prometheus.io/download/#node_exporter` and download the latest Linux (amd64) version.",
+          "   - Example (replace version if needed):",
+          "     ```yaml\n     wget https://github.com/prometheus/node_exporter/releases/download/v1.8.1/node_exporter-1.8.1.linux-amd64.tar.gz\n     tar xvf node_exporter-1.8.1.linux-amd64.tar.gz\n     sudo cp node_exporter-1.8.1.linux-amd64/node_exporter /usr/local/bin/\n     ```",
+          "Create `node_exporter` User:",
+          "   - For security, run Node Exporter as a dedicated non-privileged user.",
+          "     ```yaml\n     sudo useradd -rs /bin/false node_exporter\n     ```",
+          "Create systemd Service File:",
+          "   - Create `/etc/systemd/system/node_exporter.service` with the following content:",
+          "     ```yaml\n     [Unit]\n     Description=Node Exporter\n     Wants=network-online.target\n     After=network-online.target\n\n     [Service]\n     User=node_exporter\n     Group=node_exporter\n     Type=simple\n     ExecStart=/usr/local/bin/node_exporter\n\n     [Install]\n     WantedBy=multi-user.target\n     ```",
+          "Start Node Exporter Service:",
+          "   - Reload systemd, enable, and start the service.",
+          "     ```yaml\n     sudo systemctl daemon-reload\n     sudo systemctl enable node_exporter\n     sudo systemctl start node_exporter\n     sudo systemctl status node_exporter\n     ```",
+          "Firewall Configuration (if applicable):",
+          "   - Ensure port `9100` (default) is open. For `ufw` (Ubuntu):",
+          "     ```yaml\n     sudo ufw allow 9100/tcp\n     sudo ufw reload\n     ```",
+          "Verify Metrics Endpoint:",
+          "   - Access `http://<YOUR_SERVER_IP>:9100/metrics` in a browser or use `curl http://<YOUR_SERVER_IP>:9100/metrics`.",
+          "   - You should see a page full of Prometheus metrics.",
+          "Configure Prometheus:",
+          "   - Add the generated YAML snippet to your `prometheus.yml` file under `scrape_configs:`. Ensure `<YOUR_SERVER_IP>` is replaced with the actual IP from the Wizard's configuration (param1).",
+          "Reload Prometheus Configuration:",
+          "   - `curl -X POST http://<PROMETHEUS_HOST_IP>:9090/-/reload` or send a `SIGHUP` signal."
         ];
         break;
       case 'Windows Server':
         rawInstructions = [
+          "Download Windows Exporter:",
+          "   - Go to `https://github.com/prometheus-community/windows_exporter/releases` and download the latest `.msi` installer.",
           "Install Windows Exporter:",
-          "   - Download the latest `windows_exporter` MSI installer from `https://github.com/prometheus-community/windows_exporter/releases`.",
-          "   - Run the MSI installer.",
-          "Configure Collectors (during install or post-install):",
-          "   - The default port is `9182`.",
-          "   - During installation, you can select which collectors to enable. Common ones include: `cpu,cs,logical_disk,net,os,service,system,memory,tcp,process`.",
-          "   - To change collectors after install, modify the service arguments: `windows_exporter.exe --collectors.enabled=\"cpu,cs,logical_disk,net,os,service,system,memory,tcp,process,iis\"` (example).",
-          "Windows Firewall:",
-          "   - Allow port `9182` (or your custom port). Use PowerShell:",
-          "     `New-NetFirewallRule -DisplayName \"Windows Exporter\" -Direction Inbound -Action Allow -Protocol TCP -LocalPort 9182`",
-          "Verify Metrics:",
-          "   - Check `http://<windows_server_ip>:9182/metrics`.",
-          "Prometheus Configuration:",
-          "   - Add generated YAML to `prometheus.yml`.",
-          "Reload Prometheus:",
-          "   - `curl -X POST http://<prometheus_host>:9090/-/reload`."
+          "   - Run the downloaded MSI installer.",
+          "   - During installation, you can select which collectors to enable (e.g., `cpu,cs,logical_disk,net,os,service,system,memory,tcp,process`). The default port is `9182`.",
+          "   - You can also enable all default collectors by running `msiexec /i windows_exporter-XXX.msi ENABLED_COLLECTORS=\"defaults\"`",
+          "Configure Windows Firewall:",
+          "   - Allow incoming TCP connections on port `9182` (or your custom port). Using PowerShell:",
+          "     ```yaml\n     New-NetFirewallRule -DisplayName \"Windows Exporter\" -Direction Inbound -Action Allow -Protocol TCP -LocalPort 9182\n     ```",
+          "Verify Metrics Endpoint:",
+          "   - Access `http://<YOUR_WINDOWS_SERVER_IP>:9182/metrics` in a browser or use `curl`.",
+          "Configure Prometheus:",
+          "   - Add the generated YAML snippet to your `prometheus.yml`. Ensure `<YOUR_WINDOWS_SERVER_IP>` is replaced with the actual IP from the Wizard's configuration (param1).",
+          "Reload Prometheus Configuration:",
+          "   - `curl -X POST http://<PROMETHEUS_HOST_IP>:9090/-/reload`."
         ];
         break;
       case 'Docker':
         rawInstructions = [
-          "Choose Exporter (cAdvisor Recommended for Container Metrics):",
-          "   - This guide assumes you're using cAdvisor for general container metrics. For Docker daemon-specific metrics, consult Docker's official documentation.",
+          "Choose Exporter (cAdvisor Recommended):",
+          "   - For general container metrics, Google's cAdvisor is recommended. For Docker daemon-specific metrics, use Docker's built-in metrics or a dedicated Docker exporter.",
           "Run cAdvisor Container:",
-          "   - Execute the following Docker command:",
-          "     ```yaml\n     docker run \\\n       --volume=/:/rootfs:ro \\\n       --volume=/var/run:/var/run:rw \\\n       --volume=/sys:/sys:ro \\\n       --volume=/var/lib/docker/:/var/lib/docker:ro \\\n       --publish=8080:8080 \\\n       --detach=true \\\n       --name=cadvisor \\\n       gcr.io/cadvisor/cadvisor:latest\n     ```",
-          "   - Adjust the publish port (`-p 8080:8080`) if port `8080` is already in use on your Docker host.",
+          "   - Execute the following command on your Docker host. Adjust the published port (`-p 8080:8080`) if `8080` is in use.",
+          "     ```yaml\n     docker run \\\n       --volume=/:/rootfs:ro \\\n       --volume=/var/run:/var/run:rw \\\n       --volume=/sys:/sys:ro \\\n       --volume=/var/lib/docker/:/var/lib/docker:ro \\\n       --publish=8080:8080 \\\n       --detach=true \\\n       --name=cadvisor \\\n       --privileged \\\n       --device=/dev/kmsg \\\n       gcr.io/cadvisor/cadvisor:latest\n     ```",
           "Verify cAdvisor Metrics:",
-          "   - Access `http://<docker_host_ip>:8080/metrics` (use the host port you published).",
-          "Prometheus Configuration:",
-          "   - Add the generated YAML to `prometheus.yml`. Ensure the target in the YAML points to your cAdvisor instance (e.g., `docker_host_ip:8080`).",
-          "Reload Prometheus:",
-          "   - `curl -X POST http://<prometheus_host>:9090/-/reload`."
+          "   - Access `http://<DOCKER_HOST_IP>:8080/metrics` (use the host port you published).",
+          "Configure Prometheus:",
+          "   - Add the generated YAML snippet to your `prometheus.yml`. The target should be `<DOCKER_HOST_IP>:8080` or as configured in the Wizard (param1). The metrics_path is usually `/metrics` (param2).",
+          "Reload Prometheus Configuration:",
+          "   - `curl -X POST http://<PROMETHEUS_HOST_IP>:9090/-/reload`."
         ];
         break;
       case 'Application':
         rawInstructions = [
           "Instrument Your Application:",
-          "   - Ensure your application uses a Prometheus client library to expose metrics.",
-          "   - Examples: `prometheus-client` for Python/Java, `prom-client` for Node.js.",
-          "   - Metrics should be exposed on an HTTP endpoint, typically `/metrics`.",
+          "   - Integrate a Prometheus client library suitable for your application's language (e.g., `prometheus-client` for Python/Java, `prom-client` for Node.js).",
+          "   - Expose application-specific metrics on an HTTP endpoint, typically `/metrics`.",
           "Verify Metrics Endpoint:",
-          "   - Confirm that `http://<app_host>:<app_port>/metrics` is accessible and serves Prometheus-formatted metrics.",
+          "   - Ensure `http://<YOUR_APP_HOST>:<APP_PORT>/metrics` (as configured in param1 of the wizard) is accessible and serves Prometheus-formatted metrics.",
           "Firewall/Network Access:",
-          "   - Ensure any firewalls (host-based or network) allow Prometheus to reach the application's metrics port and path.",
-          "Prometheus Configuration:",
-          "   - Add the generated YAML to your `prometheus.yml`.",
-          "Reload Prometheus:",
-          "   - `curl -X POST http://<prometheus_host>:9090/-/reload`."
+          "   - Confirm that Prometheus can reach your application's metrics endpoint. Check host-based firewalls, network firewalls, and cloud security groups.",
+          "Configure Prometheus:",
+          "   - Add the generated YAML snippet to your `prometheus.yml`.",
+          "Reload Prometheus Configuration:",
+          "   - `curl -X POST http://<PROMETHEUS_HOST_IP>:9090/-/reload`."
         ];
         break;
       case 'Network': 
         rawInstructions = [
           "Enable SNMP on Network Device:",
           "   - Configure SNMP (v2c or v3) on your target network device (switch, router, firewall).",
-          "   - Note the SNMP community string (for v2c) or v3 credentials.",
-          "Set Up SNMP Exporter:",
-          "   - Deploy an instance of the Prometheus SNMP Exporter (e.g., `prom/snmp-exporter` Docker image).",
-          "   - Configure `snmp.yml` for your device types and desired MIBs/modules. The default `if_mib` module is often a good start.",
-          "   - Example `snmp.yml` entry (often included by default or in community examples):",
-          "     ```yaml\n     if_mib:\n       walk: [ifDescr, ifType, ifSpeed, ifPhysAddress, ifAdminStatus, ifOperStatus, ifInOctets, ifInUcastPkts, ifInNUcastPkts, ifInDiscards, ifInErrors, ifOutOctets, ifOutUcastPkts, ifOutNUcastPkts, ifOutDiscards, ifOutErrors, ifHCInOctets, ifHCOutOctets]\n       lookups:\n         - OID: 1.3.6.1.2.1.2.2.1.6 # ifPhysAddress\n           type: DisplayString\n     ```",
-          "   - Run SNMP Exporter (example using Docker, mapping port `9116`):",
-          "     `docker run -d -p 9116:9116 -v ./snmp.yml:/etc/snmp_exporter/snmp.yml prom/snmp-exporter`",
+          "   - Note the SNMP community string (for v2c) or v3 credentials. This is typically **not** provided to Prometheus Lens directly, but used by the SNMP Exporter.",
+          "Deploy SNMP Exporter:",
+          "   - Run an instance of the Prometheus SNMP Exporter (e.g., `prom/snmp-exporter` Docker image).",
+          "   - You'll need an `snmp.yml` configuration file for the exporter that defines how to query your devices. Param2 from the wizard (`SNMP Module`) refers to a module name in this file (e.g., `if_mib`).",
+          "   - Example `snmp.yml` (minimal, often built-in or community provided for common devices):",
+          "     ```yaml\n     if_mib:\n       walk: [ifDescr, ifType, ifSpeed, ifPhysAddress, ifAdminStatus, ifOperStatus, ifInOctets, ifOutOctets, ifHCInOctets, ifHCOutOctets]\n       # Add more OIDs or modules as needed\n     ```",
+          "   - Run SNMP Exporter (Docker example, exposing port `9116`):",
+          "     ```yaml\n     docker run -d -p 9116:9116 -v ./snmp.yml:/etc/snmp_exporter/snmp.yml prom/snmp-exporter\n     ```",
           "Test SNMP Exporter Endpoint:",
-          "   - `curl \"http://<snmp_exporter_host>:9116/snmp?module=<your_module_name>&target=<network_device_ip>\"`",
-          "   - Replace `<snmp_exporter_host>`, `<your_module_name>` (e.g., `if_mib`), and `<network_device_ip>`.",
-          "Prometheus Configuration:",
-          "   - The generated YAML in `prometheus.yml` targets the **SNMP Exporter itself**, passing the actual network device IP as a parameter.",
-          "   - **Crucially, update the `replacement` field in `relabel_configs` to point to your SNMP Exporter's address (e.g., `snmp-exporter.example.com:9116` or `localhost:9116` if local).**",
-          "     ```yaml\n     # This job scrapes the SNMP exporter, passing the actual network device as a parameter.\n     - job_name: 'your_network_device_job_name'\n       scrape_interval: 60s \n       static_configs:\n         - targets:\n           - <network_device_ip_1> # This is NOT scraped directly by Prometheus\n           - <network_device_ip_2>\n       metrics_path: /snmp\n       params:\n         module: [if_mib] # Or your specified module\n       relabel_configs:\n         - source_labels: [__address__]\n           target_label: __param_target\n         - source_labels: [__param_target]\n           target_label: instance\n         - target_label: __address__\n           replacement: your-snmp-exporter-host:9116 # IMPORTANT: Update this line!\n     ```",
-          "Reload Prometheus:",
-          "   - `curl -X POST http://<prometheus_host>:9090/-/reload`."
+          "   - From a machine that can reach the SNMP Exporter, run:",
+          "     `curl \"http://<SNMP_EXPORTER_HOST>:9116/snmp?module=<YOUR_SNMP_MODULE>&target=<NETWORK_DEVICE_IP>\"`",
+          "   - Replace placeholders. `<NETWORK_DEVICE_IP>` is param1 from the wizard.",
+          "Configure Prometheus:",
+          "   - The generated YAML in `prometheus.yml` targets the **SNMP Exporter itself**.",
+          "   - **Crucially, update the `replacement` field in `relabel_configs` to point to your SNMP Exporter's actual address and port (e.g., `snmp-exporter.example.com:9116`).** The wizard configures param1 as the device IP.",
+          "Reload Prometheus Configuration:",
+          "   - `curl -X POST http://<PROMETHEUS_HOST_IP>:9090/-/reload`."
         ];
         break;
       case 'PostgreSQL':
           rawInstructions = [
               "Install PostgreSQL Exporter (`postgres_exporter`):",
-              "   - Download the binary from `https://github.com/prometheus-community/postgres_exporter/releases` or use a Docker image.",
-              "   - Example Docker command: `docker run -d -p 9187:9187 -e DATA_SOURCE_NAME=\"postgresql://user:password@host:port/database?sslmode=disable\" wrouesnel/postgres_exporter`",
+              "   - Download the binary from `https://github.com/prometheus-community/postgres_exporter/releases` or use a Docker image (e.g., `quay.io/prometheuscommunity/postgres-exporter`).",
+              "   - Example Docker command (replace placeholders):",
+              "     ```yaml\n     docker run -d -p 9187:9187 \\\n       -e DATA_SOURCE_NAME=\"postgresql://USER:PASSWORD@DB_HOST:DB_PORT/DATABASE?sslmode=disable\" \\\n       quay.io/prometheuscommunity/postgres-exporter\n     ```",
               "Configure Exporter (Connection String):",
-              "   - Set the `DATA_SOURCE_NAME` environment variable for the exporter.",
+              "   - The exporter uses a `DATA_SOURCE_NAME` environment variable or command-line flag.",
               "   - Format: `postgresql://<user>:<password>@<db_host>:<db_port>/<database_name>?sslmode=<ssl_preference>`",
-              "   - Example: `DATA_SOURCE_NAME=\"postgresql://pguser:pgpass@my.postgres.host:5432/mydb?sslmode=require\"`",
-              "   - Ensure the database user has sufficient privileges (e.g., connect, read pg_stat_activity).",
+              "   - The `DB_HOST` from `DATA_SOURCE_NAME` should match param1 from the wizard. The exporter port (e.g., `9187`) is param2.",
+              "   - Ensure the database user (e.g., `USER`) has privileges like `pg_monitor` or at least `SELECT` on `pg_stat_activity` and other relevant tables.",
               "Run Exporter:",
-              "   - Start the exporter service or Docker container. Default port is `9187`.",
+              "   - Start the exporter service or Docker container. The default port is typically `9187`.",
               "Firewall:",
-              "   - Allow TCP connections to port `9187` (or your custom exporter port) from your Prometheus server.",
+              "   - Allow TCP connections to the exporter's port (e.g., `9187`) from your Prometheus server.",
               "Verify Metrics:",
-              "   - Access `http://<exporter_host>:9187/metrics`.",
-              "Prometheus Configuration:",
-              "   - Add the generated YAML to `prometheus.yml` (targets the exporter).",
-              "Reload Prometheus:",
-              "   - `curl -X POST http://<prometheus_host>:9090/-/reload`."
+              "   - Access `http://<EXPORTER_HOST_IP_OR_DB_HOST_IP>:<EXPORTER_PORT>/metrics`. The target for Prometheus is the exporter.",
+              "Configure Prometheus:",
+              "   - Add the generated YAML snippet to `prometheus.yml`. It targets the exporter at `<DB_HOST_IP>:<EXPORTER_PORT>` (param1:param2 from wizard).",
+              "Reload Prometheus Configuration:",
+              "   - `curl -X POST http://<PROMETHEUS_HOST_IP>:9090/-/reload`."
           ];
           break;
       case 'MySQL':
           rawInstructions = [
               "Install MySQL Exporter (`mysqld_exporter`):",
-              "   - Download binary from `https://github.com/prometheus/mysqld_exporter/releases` or use Docker image (e.g., `prom/mysqld-exporter`).",
-              "   - Example Docker: `docker run -d -p 9104:9104 -e DATA_SOURCE_NAME='user:password@(host:port)/' prom/mysqld-exporter`",
+              "   - Download binary from `https://github.com/prometheus/mysqld_exporter/releases` or use a Docker image (e.g., `prom/mysqld-exporter`).",
+              "   - Example Docker command (replace placeholders):",
+              "     ```yaml\n     docker run -d -p 9104:9104 \\\n       -e DATA_SOURCE_NAME='USER:PASSWORD@(DB_HOST:DB_PORT)/' \\\n       prom/mysqld-exporter\n     ```",
               "Configure Exporter (Connection String):",
-              "   - Set `DATA_SOURCE_NAME` environment variable.",
-              "   - Format: `<user>:<password>@(<db_host>:<db_port>)/[<database_name>]` (database name is optional).",
-              "   - Example: `DATA_SOURCE_NAME='exporter_user:secret@(my.mysql.host:3306)/'`",
-              "   - Create a dedicated MySQL user for the exporter with necessary privileges (e.g., `PROCESS`, `REPLICATION CLIENT`, `SELECT`).",
-              "     ```yaml\n     CREATE USER 'exporter'@'%' IDENTIFIED BY 'password' WITH MAX_USER_CONNECTIONS 3;\n     GRANT PROCESS, REPLICATION CLIENT, SELECT ON *.* TO 'exporter'@'%';\n     FLUSH PRIVILEGES;\n     ```",
+              "   - Set the `DATA_SOURCE_NAME` environment variable or command-line flag.",
+              "   - Format: `<user>:<password>@(<db_host>:<db_port>)/[<database_name>]`. The database name is often optional.",
+              "   - `DB_HOST` should match param1 from the wizard. The exporter port (e.g., `9104`) is param2.",
+              "   - Create a dedicated MySQL user for the exporter:",
+              "     ```yaml\n     CREATE USER 'exporter'@'%' IDENTIFIED BY 'your_password' WITH MAX_USER_CONNECTIONS 3;\n     GRANT PROCESS, REPLICATION CLIENT, SELECT ON *.* TO 'exporter'@'%';\n     FLUSH PRIVILEGES;\n     ```",
               "Run Exporter:",
-              "   - Start the exporter service/container. Default port is `9104`.",
+              "   - Start the exporter. The default port is `9104`.",
               "Firewall:",
-              "   - Allow TCP connections to port `9104` (or custom) from Prometheus.",
+              "   - Allow TCP connections to the exporter's port from Prometheus.",
               "Verify Metrics:",
-              "   - Access `http://<exporter_host>:9104/metrics`.",
-              "Prometheus Configuration:",
-              "   - Add generated YAML to `prometheus.yml` (targets the exporter).",
-              "Reload Prometheus:",
-              "   - `curl -X POST http://<prometheus_host>:9090/-/reload`."
+              "   - Access `http://<EXPORTER_HOST_IP_OR_DB_HOST_IP>:<EXPORTER_PORT>/metrics`.",
+              "Configure Prometheus:",
+              "   - Add generated YAML to `prometheus.yml`. It targets the exporter at `<DB_HOST_IP>:<EXPORTER_PORT>` (param1:param2 from wizard).",
+              "Reload Prometheus Configuration:",
+              "   - `curl -X POST http://<PROMETHEUS_HOST_IP>:9090/-/reload`."
           ];
           break;
       case 'MongoDB':
           rawInstructions = [
               "Install MongoDB Exporter:",
-              "   - Several exporters exist, `mongodb_exporter` by Percona or the one from `dcu` are common.",
-              "   - Percona: `https://github.com/percona/mongodb_exporter`",
-              "   - dcu: `https://github.com/dcu/mongodb_exporter` (simpler, often sufficient)",
-              "   - Example Docker (dcu): `docker run -d -p 9216:9216 -e MONGODB_URI=\"mongodb://user:password@host:port/?authSource=admin\" dcu/mongodb-exporter`",
+              "   - A common choice is `dcu/mongodb-exporter` or Percona's `mongodb_exporter`.",
+              "   - Example Docker command for `dcu/mongodb-exporter` (replace placeholders):",
+              "     ```yaml\n     docker run -d -p 9216:9216 \\\n       -e MONGODB_URI=\"mongodb://USER:PASSWORD@MONGO_HOST:MONGO_PORT/?authSource=admin\" \\\n       dcu/mongodb-exporter\n     ```",
               "Configure Exporter (MongoDB URI):",
-              "   - Provide the MongoDB connection URI via environment variable (e.g., `MONGODB_URI` or specific to exporter).",
+              "   - Provide the MongoDB connection URI (param1 from wizard) via an environment variable like `MONGODB_URI`.",
               "   - URI Format: `mongodb://[username:password@]host1[:port1][,...hostN[:portN]][/[database][?options]]`",
-              "   - Example: `MONGODB_URI=\"mongodb://mongoadmin:secret@my.mongo.host:27017/admin?ssl=true\"`",
+              "   - Example: `mongodb://mongoadmin:secret@my.mongo.host:27017/admin?ssl=true`",
               "   - Ensure the MongoDB user has roles like `clusterMonitor` and `readAnyDatabase`.",
               "Run Exporter:",
-              "   - Start the exporter service/container. Default port for `dcu/mongodb-exporter` is `9216`, Percona's might be `9104` or configurable.",
+              "   - Start the exporter. Port for `dcu/mongodb-exporter` is typically `9216` (param2 from wizard).",
               "Firewall:",
               "   - Allow TCP connections to the exporter's port from Prometheus.",
               "Verify Metrics:",
-              "   - Access `http://<exporter_host>:<exporter_port>/metrics`.",
-              "Prometheus Configuration:",
-              "   - Add generated YAML to `prometheus.yml` (targets the exporter).",
-              "Reload Prometheus:",
-              "   - `curl -X POST http://<prometheus_host>:9090/-/reload`."
+              "   - Access `http://<EXPORTER_HOST_IP_OR_MONGO_HOST_IP_IF_SAME_MACHINE>:<EXPORTER_PORT>/metrics`.",
+              "Configure Prometheus:",
+              "   - Add generated YAML to `prometheus.yml`. It targets the exporter at an address derived from your MongoDB URI host and the exporter port. For simplicity, the Prometheus config assumes param1 from the wizard is the host of the *exporter* if it's different from the MongoDB host itself. Often they are on the same machine or the exporter host is specified as the primary target.",
+              "Reload Prometheus Configuration:",
+              "   - `curl -X POST http://<PROMETHEUS_HOST_IP>:9090/-/reload`."
           ];
           break;
       case 'Kubernetes':
           rawInstructions = [
-              "API Server Accessibility:",
-              "   - Ensure Prometheus can reach the Kubernetes API server. If running Prometheus outside the cluster, you must configure the `api_server` URL and authentication details in `prometheus.yml`.",
-              "Service Discovery Role (`kubernetes_sd_configs`):",
-              "   - Choose the appropriate `role` for discovering targets: `pod`, `service`, `endpoints`, `node`, `ingress`. `pod` is common for application metrics.",
-              "Authentication:",
-              "   - **In-cluster:** Prometheus typically uses the service account token automatically mounted at `/var/run/secrets/kubernetes.io/serviceaccount/token`. This is often the default if `bearer_token_file` is not specified.",
-              "   - **External:** Provide `bearer_token_file` or configure other authentication methods (e.g., `basic_auth`, `tls_config`).",
-              "RBAC Permissions:",
-              "   - Prometheus needs permissions to list and watch Kubernetes resources. Create a `ClusterRole` and `ClusterRoleBinding` (or `Role`/`RoleBinding` for namespace-specific monitoring).",
+              "API Server Accessibility & Authentication:",
+              "   - Ensure Prometheus can reach the Kubernetes API server (param1 from wizard).",
+              "   - If Prometheus is in-cluster, it typically uses the service account token at `/var/run/secrets/kubernetes.io/serviceaccount/token`. If `bearer_token_file` (param2 from wizard) is not specified, this is often assumed.",
+              "   - For external Prometheus, provide `bearer_token_file` or configure other methods (`basic_auth`, `tls_config`).",
+              "RBAC Permissions for Prometheus Service Account:",
+              "   - Prometheus needs permissions to discover and scrape targets. Create a `ClusterRole` and `ClusterRoleBinding` (or namespace-specific `Role`/`RoleBinding`).",
               "   - **Example `ClusterRole` (prometheus-cluster-role.yaml):**",
-              "     ```yaml\n     apiVersion: rbac.authorization.k8s.io/v1\n     kind: ClusterRole\n     metadata:\n       name: prometheus\n     rules:\n     - apiGroups: [\"\"]\n       resources:\n       - nodes\n       - nodes/metrics\n       - services\n       - endpoints\n       - pods\n       - configmaps # For service discovery using configmaps\n       verbs: [get, list, watch]\n     - apiGroups:\n       - extensions\n       - networking.k8s.io # For ingresses\n       resources:\n       - ingresses\n       verbs: [get, list, watch]\n     - nonResourceURLs: [\"/metrics\"]\n       verbs: [get]\n     ```",
-              "   - **Example `ClusterRoleBinding` (prometheus-cluster-role-binding.yaml):**",
-              "     ```yaml\n     apiVersion: rbac.authorization.k8s.io/v1\n     kind: ClusterRoleBinding\n     metadata:\n       name: prometheus\n     roleRef:\n       apiGroup: rbac.authorization.k8s.io\n       kind: ClusterRole\n       name: prometheus\n     subjects:\n     - kind: ServiceAccount\n       name: prometheus # Name of your Prometheus service account\n       namespace: monitoring # Namespace where Prometheus is running\n     ```",
-              "   - Apply with `kubectl apply -f prometheus-cluster-role.yaml -f prometheus-cluster-role-binding.yaml`.",
-              "Relabeling (`relabel_configs`):",
-              "   - Use `relabel_configs` extensively to filter targets (e.g., scrape only pods with `prometheus.io/scrape: 'true'` annotation) and to shape metric labels.",
-              "   - **Example: Scrape pods annotated with `prometheus.io/scrape: 'true'` and use `prometheus.io/port` for the scrape port:**",
-              "     ```yaml\n     relabel_configs:\n     - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_scrape]\n       action: keep\n       regex: true\n     - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_path]\n       action: replace\n       target_label: __metrics_path__\n       regex: (.+)\n     - source_labels: [__address__, __meta_kubernetes_pod_annotation_prometheus_io_port]\n       action: replace\n       regex: ([^:]+)(?::\\d+)?;(\\d+)\n       replacement: $$1:$$2\n       target_label: __address__\n     # Add more relabeling as needed for service, app, etc. labels\n     - source_labels: [__meta_kubernetes_namespace]\n       target_label: kubernetes_namespace\n     - source_labels: [__meta_kubernetes_pod_name]\n       target_label: kubernetes_pod_name\n     ```",
-              "Prometheus Configuration:",
-              "   - Add the generated (and likely further customized) `kubernetes_sd_configs` scrape job to your `prometheus.yml`.",
-              "Reload Prometheus:",
-              "   - `curl -X POST http://<prometheus_host>:9090/-/reload`."
+              "     ```yaml\n     apiVersion: rbac.authorization.k8s.io/v1\n     kind: ClusterRole\n     metadata:\n       name: prometheus-lens-scraper\n     rules:\n     - apiGroups: [\"\"]\n       resources:\n       - nodes\n       - nodes/proxy\n       - nodes/metrics\n       - services\n       - endpoints\n       - pods\n       - configmaps\n       verbs: [get, list, watch]\n     - apiGroups:\n       - networking.k8s.io \n       resources:\n       - ingresses\n       verbs: [get, list, watch]\n     - nonResourceURLs: [\"/metrics\"]\n       verbs: [get]\n     ```",
+              "   - **Example `ClusterRoleBinding` (prometheus-crb.yaml):** (Replace `YOUR_PROMETHEUS_NAMESPACE` and `YOUR_PROMETHEUS_SA_NAME`)",
+              "     ```yaml\n     apiVersion: rbac.authorization.k8s.io/v1\n     kind: ClusterRoleBinding\n     metadata:\n       name: prometheus-lens-scraper\n     roleRef:\n       apiGroup: rbac.authorization.k8s.io\n       kind: ClusterRole\n       name: prometheus-lens-scraper\n     subjects:\n     - kind: ServiceAccount\n       name: YOUR_PROMETHEUS_SA_NAME \n       namespace: YOUR_PROMETHEUS_NAMESPACE\n     ```",
+              "   - Apply with `kubectl apply -f prometheus-cluster-role.yaml -f prometheus-crb.yaml`.",
+              "Pod Annotations for Scrape Configuration:",
+              "   - The generated Prometheus config uses `relabel_configs` to scrape pods annotated with `prometheus.io/scrape: 'true'` and using the port named `metrics`.",
+              "   - Annotate your application pods:",
+              "     ```yaml\n     metadata:\n       annotations:\n         prometheus.io/scrape: \"true\"\n         prometheus.io/port: \"YOUR_APP_METRICS_PORT_NUMBER_AS_STRING\"\n         prometheus.io/path: \"/your/metrics/path\" # Optional, defaults to /metrics\n     spec:\n       containers:\n       - name: my-app\n         ports:\n         - name: metrics # Must match the port name Prometheus looks for, or adjust relabel_configs\n           containerPort: YOUR_APP_METRICS_PORT_NUMBER\n     ```",
+              "Configure Prometheus:",
+              "   - Add the generated `kubernetes_sd_configs` job to your `prometheus.yml`. You might need to customize `relabel_configs` further based on your needs (e.g., specific namespaces, different port names).",
+              "Reload Prometheus Configuration:",
+              "   - `curl -X POST http://<PROMETHEUS_HOST_IP>:9090/-/reload`."
           ];
           break;
       default:
         rawInstructions = [
           "Expose Metrics:",
-          "   - Ensure the asset exposes Prometheus-compatible metrics on a reachable HTTP endpoint (often `/metrics`).",
+          "   - Ensure the asset exposes Prometheus-compatible metrics on a reachable HTTP endpoint (often `/metrics`). This usually involves an exporter specific to the technology.",
           "Network Access:",
           "   - Confirm Prometheus can reach this endpoint over the network. Check firewalls, routing, and any network policies.",
-          "Prometheus Configuration:",
+          "Configure Prometheus:",
           "   - Add the generated scrape configuration to your `prometheus.yml` file under the `scrape_configs:` section.",
           "Reload Prometheus Configuration:",
-          "   - `curl -X POST http://<prometheus_host>:9090/-/reload` or send a `SIGHUP` signal to the Prometheus process."
+          "   - `curl -X POST http://<PROMETHEUS_HOST_IP>:9090/-/reload` or send a `SIGHUP` signal."
         ];
         break;
     }
   }
-  // Process raw instructions to add "Step X" header and format content
   return rawInstructions.map((stepContent, index) => {
-    // Remove existing markdown bold numbering like "**1. Foobar**" or "1. Foobar" to avoid "Step 1: **1. Install..."
-    // This regex tries to match "**N.** ", "*N.* ", "N. " at the beginning of the string.
     const cleanedStepContent = stepContent.replace(/^\s*(\*{1,2}\s*\d+\.\s*\*{0,2}\s*)/, '');
-    
     const stepHeader = `<div class="mb-3"><span class="inline-block text-xs font-bold uppercase py-1 px-3 tracking-wider rounded-full bg-primary/10 text-primary">Step ${index + 1}</span></div>`;
-    
     const formattedContent = formatInstructionStep(cleanedStepContent); 
-    
     return `${stepHeader}${formattedContent}`;
   });
 };
+
