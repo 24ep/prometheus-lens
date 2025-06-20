@@ -284,11 +284,11 @@ export function AssetConnectionWizard({ onSaveComplete }: AssetConnectionWizardP
                   <Label className="font-semibold block mb-1.5">Connection Instructions for {watchedType}</Label>
                   <ScrollArea className="h-56 w-full rounded-md border p-3 bg-muted/20">
                     {instructionSteps.length > 0 ? (
-                       <ol className="list-decimal list-inside space-y-4 text-sm">
-                        {instructionSteps.map((step, index) => (
-                           <li key={index} className="p-4 border rounded-lg bg-card shadow-sm" dangerouslySetInnerHTML={{ __html: step }}></li>
+                       <div className="space-y-6 text-sm">
+                        {instructionSteps.map((stepHtml, index) => (
+                           <div key={index} className="p-4 border rounded-lg bg-card shadow-sm" dangerouslySetInnerHTML={{ __html: stepHtml }}></div>
                         ))}
-                      </ol>
+                      </div>
                     ) : (
                       <p className="text-sm text-muted-foreground">No specific instructions for this asset type.</p>
                     )}

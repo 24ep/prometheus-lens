@@ -169,11 +169,11 @@ export function AssetDetailsDialog({ asset, allFolders, isOpen, onOpenChange, on
                   </div>
                   {instructionSteps.length > 0 ? (
                     <ScrollArea className="h-64 w-full rounded-md p-1">
-                        <ol className="list-decimal list-inside space-y-4 text-sm">
-                        {instructionSteps.map((step, index) => (
-                            <li key={index} className="p-4 border rounded-lg bg-card shadow-sm" dangerouslySetInnerHTML={{ __html: step }}></li>
+                        <div className="space-y-6 text-sm">
+                        {instructionSteps.map((stepHtml, index) => (
+                            <div key={index} className="p-4 border rounded-lg bg-card shadow-sm" dangerouslySetInnerHTML={{ __html: stepHtml }}></div>
                         ))}
-                        </ol>
+                        </div>
                     </ScrollArea>
                   ) : (
                     <p className="text-sm text-muted-foreground">No specific instructions available for this asset type.</p>
