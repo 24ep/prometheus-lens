@@ -1,3 +1,4 @@
+
 "use client";
 
 import React, { useState } from 'react';
@@ -13,9 +14,19 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { useToast } from '@/hooks/use-toast';
 import { assetTypes, type AssetType, type Asset } from '@/types';
 import { mockFoldersData } from '@/lib/mock-data';
-import { ArrowLeft, ArrowRight, Check, Sparkles, Info, TestTubeDiagonal } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Check, Sparkles, Info, TestTubeDiagonal, FileText } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { ScrollArea } from '../ui/scroll-area';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+  DialogClose,
+} from '@/components/ui/dialog';
 
 const formSchema = z.object({
   name: z.string().min(3, { message: "Asset name must be at least 3 characters." }),
@@ -24,11 +35,9 @@ const formSchema = z.object({
   }),
   folderId: z.string().optional(),
   tags: z.string().optional(), // Comma-separated
-  // Configuration fields will be dynamic, so not strictly typed here for simplicity
-  // For a real app, use z.discriminatedUnion for type-specific configs
-  config_param1: z.string().optional(), // Example: IP Address / Metrics Endpoint
-  config_param2: z.string().optional(), // Example: Port / Job Name
-  prometheus_config: z.string().optional(), // For manual YAML input or generated output
+  config_param1: z.string().optional(), 
+  config_param2: z.string().optional(), 
+  prometheus_config: z.string().optional(), 
 });
 
 type FormData = z.infer<typeof formSchema>;
@@ -58,11 +67,9 @@ const getMockPrometheusConfig = (data: Partial<FormData>): string => {
 scrape_configs:
   - job_name: '${jobName}'
     kubernetes_sd_configs:
-      - role: pod # or node, service, etc.
+      - role: pod 
         api_server: ${data.config_param1 || 'YOUR_K8S_API_SERVER'}
-        # bearer_token: ${data.config_param2 || 'YOUR_BEARER_TOKEN'} # if needed
     relabel_configs:
-      # Example relabeling, adjust as needed
       - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_scrape]
         action: keep
         regex: true
@@ -74,23 +81,62 @@ scrape_configs:
   - job_name: '${jobName}'
     static_configs:
       - targets: [${targets}]
-    # Add more specific configurations based on asset type
-    # metrics_path: /metrics # default, adjust if needed
-    # scheme: http # default, adjust if https
 `;
 };
 
-const getMockInstructions = (type?: AssetType): string => {
-  if (!type) return "Select an asset type to see specific instructions.";
+const getMockInstructions = (type?: AssetType): string[] => {
+  if (!type) return ["Select an asset type to see specific instructions."];
   switch (type) {
     case 'Server':
-      return "1. Install Node Exporter on the server.\n2. Ensure port (default 9100) is open.\n3. Add the generated scrape config to your prometheus.yml.";
+      return [
+        "Install Node Exporter on the target server.",
+        "Ensure the Node Exporter port (default 9100) is accessible from your Prometheus server.",
+        "Verify Node Exporter is serving metrics at `/metrics` endpoint (e.g., `http://<server_ip>:9100/metrics`).",
+        "Add the generated scrape configuration to your `prometheus.yml` file.",
+        "Reload your Prometheus configuration (e.g., `kill -HUP <prometheus_pid>` or via API endpoint)."
+      ];
     case 'Application':
-      return "1. Expose a /metrics endpoint in your application (e.g., using a Prometheus client library).\n2. Add the generated scrape config to prometheus.yml.";
+      return [
+        "Ensure your application exposes a Prometheus metrics endpoint (commonly `/metrics`).",
+        "If using a client library (e.g., prometheus-client for Python/Java, prom-client for Node.js), configure it appropriately.",
+        "Verify the metrics endpoint is accessible from your Prometheus server.",
+        "Add the generated scrape configuration to your `prometheus.yml` file.",
+        "Reload your Prometheus configuration."
+      ];
     case 'Network':
-      return "1. Ensure SNMP is enabled on the network device.\n2. Use the correct community string.\n3. Install and configure SNMP Exporter if not scraping directly.\n4. Add scrape config to prometheus.yml pointing to SNMP Exporter or device.";
+      return [
+        "Ensure SNMP is enabled on the network device.",
+        "Verify the SNMP community string and version (v1, v2c, or v3 credentials).",
+        "If not scraping the device directly, ensure an SNMP Exporter is running and configured to query the device.",
+        "Verify the SNMP Exporter's `/snmp` endpoint (e.g., `http://<exporter_ip>:9116/snmp?module=if_mib&target=<device_ip>`).",
+        "Add the generated scrape configuration to `prometheus.yml` (pointing to the SNMP Exporter).",
+        "Reload your Prometheus configuration."
+      ];
+    case 'Database':
+        return [
+            "Install the appropriate Prometheus exporter for your database type (e.g., `pg_exporter` for PostgreSQL, `mysqld_exporter` for MySQL).",
+            "Configure the exporter with connection details for your database instance.",
+            "Ensure the exporter port (e.g., 9187 for PostgreSQL, 9104 for MySQL) is accessible from Prometheus.",
+            "Verify the exporter is serving metrics at its `/metrics` endpoint.",
+            "Add the generated scrape configuration to your `prometheus.yml` file.",
+            "Reload your Prometheus configuration."
+        ];
+    case 'Kubernetes':
+        return [
+            "Ensure your Kubernetes cluster's API server is accessible by Prometheus.",
+            "Determine the appropriate service discovery role (e.g., `pod`, `service`, `node`, `endpoints`).",
+            "If required, provide a bearer token or configure TLS settings for authentication.",
+            "Apply necessary RBAC rules to allow Prometheus to discover targets (e.g., ClusterRole, ClusterRoleBinding).",
+            "Check for annotations like `prometheus.io/scrape: 'true'` and `prometheus.io/port: '<port_number>'` on your pods/services if using `relabel_configs` for filtering.",
+            "Add the generated scrape configuration to your `prometheus.yml` file.",
+            "Reload your Prometheus configuration."
+        ];
     default:
-      return "1. Ensure the asset exposes Prometheus metrics.\n2. Add the generated scrape config to your prometheus.yml.\n3. Reload Prometheus configuration: `kill -HUP <prometheus_pid>` or via API.";
+      return [
+        "Ensure the asset exposes Prometheus-compatible metrics on a reachable HTTP endpoint.",
+        "Add the generated scrape configuration to your `prometheus.yml` file.",
+        "Reload Prometheus configuration (e.g., `kill -HUP <prometheus_pid>` or via API endpoint)."
+      ];
   }
 };
 
@@ -101,7 +147,7 @@ export function AssetConnectionWizard() {
   const form = useForm<FormData>({
     resolver: zodResolver(formSchema),
     defaultValues: {
-      type: assetTypes[0], // Default to first asset type
+      type: assetTypes[0], 
     },
   });
 
@@ -116,6 +162,8 @@ export function AssetConnectionWizard() {
     config_param1: watchedConfigParam1,
     config_param2: watchedConfigParam2,
   });
+  
+  const instructionSteps = getMockInstructions(watchedType);
 
   const handleNext = async () => {
     const isValid = await form.trigger(
@@ -125,7 +173,6 @@ export function AssetConnectionWizard() {
     if (isValid && currentStep < STEPS.length) {
       setCurrentStep(currentStep + 1);
     } else if (isValid && currentStep === STEPS.length) {
-      // Final submission
       onSubmit(form.getValues());
     }
   };
@@ -137,19 +184,18 @@ export function AssetConnectionWizard() {
   };
 
   const onSubmit = (data: FormData) => {
-    console.log(data); // Mock submission
+    console.log(data); 
     toast({
       title: "Asset Configuration Saved!",
       description: `Asset "${data.name}" of type "${data.type}" has been configured.`,
       variant: 'default',
     });
-    // Potentially redirect or reset form
   };
   
   const handleTestConnection = () => {
     toast({ title: "Testing Connection...", description: "This is a mock test." });
     setTimeout(() => {
-      const success = Math.random() > 0.3; // Simulate success/failure
+      const success = Math.random() > 0.3; 
       toast({
         title: success ? "Connection Successful!" : "Connection Failed",
         description: success ? "Prometheus can reach the configured target." : "Could not connect. Check configuration and network.",
@@ -249,19 +295,42 @@ export function AssetConnectionWizard() {
           )}
           {currentStep === 3 && (
             <>
-              <div>
-                <Label className="flex items-center"><Info className="w-4 h-4 mr-2 text-primary"/> Connection Instructions for {watchedType}</Label>
-                <ScrollArea className="h-32 w-full rounded-md border p-3 bg-muted/30 mt-1">
-                    <pre className="text-sm whitespace-pre-wrap">{getMockInstructions(watchedType)}</pre>
-                </ScrollArea>
-              </div>
+              <Dialog>
+                <DialogTrigger asChild>
+                  <Button type="button" variant="outline" className="w-full mb-4">
+                    <FileText className="mr-2 h-4 w-4" />
+                    View Connection Instructions for {watchedType}
+                  </Button>
+                </DialogTrigger>
+                <DialogContent className="sm:max-w-[625px] glassmorphic">
+                  <DialogHeader>
+                    <DialogTitle className="font-headline">Connection Instructions: {watchedType}</DialogTitle>
+                    <DialogDescription>
+                      Follow these steps to connect your {watchedType} asset to Prometheus.
+                    </DialogDescription>
+                  </DialogHeader>
+                  <ScrollArea className="h-72 w-full rounded-md border p-3 my-4 bg-background/50">
+                    <ol className="list-decimal list-inside space-y-3 text-sm">
+                      {instructionSteps.map((step, index) => (
+                        <li key={index}>{step}</li>
+                      ))}
+                    </ol>
+                  </ScrollArea>
+                  <DialogFooter>
+                    <DialogClose asChild>
+                      <Button type="button" variant="outline">Close</Button>
+                    </DialogClose>
+                  </DialogFooter>
+                </DialogContent>
+              </Dialog>
+              
               <div>
                 <Label>Generated Prometheus Configuration</Label>
                  <ScrollArea className="h-40 w-full rounded-md border p-2 bg-muted/30">
                   <pre className="text-xs font-code whitespace-pre-wrap">{generatedConfig}</pre>
                 </ScrollArea>
               </div>
-              <Button type="button" variant="outline" onClick={handleTestConnection} className="w-full">
+              <Button type="button" variant="outline" onClick={handleTestConnection} className="w-full mt-4">
                 <TestTubeDiagonal className="mr-2 h-4 w-4" />
                 Test Connection (Mock)
               </Button>

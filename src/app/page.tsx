@@ -1,7 +1,9 @@
+
 "use client";
 
 import { AppLayout } from '@/components/layout/app-layout';
 import { AssetCard } from '@/components/common/asset-card';
+import { AssetListItem } from '@/components/common/asset-list-item'; // New import
 import { mockAssetsData, mockFoldersData } from '@/lib/mock-data';
 import type { Asset, AssetFolder } from '@/types';
 import { Button } from '@/components/ui/button';
@@ -20,7 +22,7 @@ import { Input } from '@/components/ui/input';
 export default function DashboardPage() {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedFolder, setSelectedFolder] = useState<string | 'all'>('all');
-  const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid'); // For potential future use
+  const [viewMode, setViewMode] = useState<'grid' | 'list'>('list'); // Default to list view
 
   const filteredAssets = useMemo(() => {
     return mockAssetsData.filter(asset => {
@@ -66,7 +68,7 @@ export default function DashboardPage() {
       </div>
 
       <div className="mb-6 p-4 rounded-lg glassmorphic">
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
+        <div className="grid grid-cols-1 md:grid-cols-[1fr_auto_auto] gap-4 items-end">
           <Input 
             placeholder="Search assets (name, type, tag)..."
             value={searchTerm}
@@ -86,16 +88,25 @@ export default function DashboardPage() {
               <SelectItem value="unfiled">Uncategorized</SelectItem>
             </SelectContent>
           </Select>
-          {/* View mode toggle - future feature
-          <div className="flex justify-end">
-            <Button variant={viewMode === 'grid' ? "default" : "outline"} size="icon" onClick={() => setViewMode('grid')} className="mr-2">
-              <LayoutGrid className="h-5 w-5"/>
-            </Button>
-            <Button variant={viewMode === 'list' ? "default" : "outline"} size="icon" onClick={() => setViewMode('list')}>
+          <div className="flex justify-start md:justify-end">
+            <Button 
+              variant={viewMode === 'list' ? "default" : "outline"} 
+              size="icon" 
+              onClick={() => setViewMode('list')} 
+              className="mr-2"
+              aria-label="List view"
+            >
               <List className="h-5 w-5"/>
             </Button>
+            <Button 
+              variant={viewMode === 'grid' ? "default" : "outline"} 
+              size="icon" 
+              onClick={() => setViewMode('grid')}
+              aria-label="Grid view"
+            >
+              <LayoutGrid className="h-5 w-5"/>
+            </Button>
           </div>
-          */}
         </div>
       </div>
       
@@ -112,13 +123,21 @@ export default function DashboardPage() {
             <h2 className="text-2xl font-headline font-semibold text-foreground mb-4 pb-2 border-b border-border/50">{group.name} ({group.assets.length})</h2>
           )}
           {group.assets.length > 0 ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-              {group.assets.map(asset => (
-                <AssetCard key={asset.id} asset={asset} />
-              ))}
-            </div>
+            viewMode === 'grid' ? (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+                {group.assets.map(asset => (
+                  <AssetCard key={asset.id} asset={asset} />
+                ))}
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {group.assets.map(asset => (
+                  <AssetListItem key={asset.id} asset={asset} />
+                ))}
+              </div>
+            )
           ) : (
-             selectedFolder !== 'all' && ( // Only show "no assets in folder" if a specific folder is selected
+             selectedFolder !== 'all' && ( 
               <div className="text-center py-6">
                 <p className="text-lg text-muted-foreground">No assets in this folder matching your search.</p>
               </div>
