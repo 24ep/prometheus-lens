@@ -14,6 +14,7 @@ import { mockFoldersData, addAsset } from '@/lib/mock-data';
 import { getMockPrometheusConfig, getMockInstructions, assetTypeConfigPlaceholders } from '@/lib/asset-utils';
 import { ArrowLeft, ArrowRight, Check, Sparkles, TestTubeDiagonal, Download } from 'lucide-react';
 import { ScrollArea } from '../ui/scroll-area';
+import { Separator } from '../ui/separator';
 
 
 const formSchema = z.object({
@@ -284,9 +285,12 @@ export function AssetConnectionWizard({ onSaveComplete }: AssetConnectionWizardP
                   <Label className="font-semibold block mb-1.5">Connection Instructions for {watchedType}</Label>
                   <ScrollArea className="h-56 w-full rounded-md border p-3 bg-muted/20">
                     {instructionSteps.length > 0 ? (
-                       <div className="space-y-6 text-sm">
+                       <div className="text-sm">
                         {instructionSteps.map((stepHtml, index) => (
-                           <div key={index} className="p-4 border rounded-lg bg-card shadow-sm" dangerouslySetInnerHTML={{ __html: stepHtml }}></div>
+                           <React.Fragment key={index}>
+                                <div dangerouslySetInnerHTML={{ __html: stepHtml }} />
+                                {index < instructionSteps.length - 1 && <Separator className="my-4" />}
+                            </React.Fragment>
                         ))}
                       </div>
                     ) : (

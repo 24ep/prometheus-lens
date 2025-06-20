@@ -169,9 +169,12 @@ export function AssetDetailsDialog({ asset, allFolders, isOpen, onOpenChange, on
                   </div>
                   {instructionSteps.length > 0 ? (
                     <ScrollArea className="h-64 w-full rounded-md p-1">
-                        <div className="space-y-6 text-sm">
+                        <div className="text-sm">
                         {instructionSteps.map((stepHtml, index) => (
-                            <div key={index} className="p-4 border rounded-lg bg-card shadow-sm" dangerouslySetInnerHTML={{ __html: stepHtml }}></div>
+                            <React.Fragment key={index}>
+                                <div dangerouslySetInnerHTML={{ __html: stepHtml }} />
+                                {index < instructionSteps.length - 1 && <Separator className="my-4" />}
+                            </React.Fragment>
                         ))}
                         </div>
                     </ScrollArea>
