@@ -67,7 +67,7 @@ const SettingsFolderTreeItem: React.FC<SettingsFolderTreeItemProps> = ({
               key={child.id}
               folder={child}
               allFolders={allFolders}
-              level={0}
+              level={0} // Child items are effectively level 0 relative to their parent in this flat recursive call
               onEditFolder={onEditFolder}
               onDeleteFolder={onDeleteFolder}
               initiallyOpen={false}
@@ -88,6 +88,11 @@ export default function SettingsPage() {
   const [isConfirmDeleteFolderDialogOpen, setIsConfirmDeleteFolderDialogOpen] = useState(false);
   const [folderToDelete, setFolderToDelete] = useState<AssetFolder | null>(null);
 
+  // Example state for integration settings - in a real app, these would be fetched/saved
+  const [defaultPrometheusUrl, setDefaultPrometheusUrl] = useState("http://localhost:9090");
+  const [defaultScrapeInterval, setDefaultScrapeInterval] = useState("15s");
+
+
   const refreshFolders = useCallback(() => {
     setFolders([...mockFoldersData].sort((a, b) => a.name.localeCompare(b.name)));
   }, []);
@@ -95,6 +100,8 @@ export default function SettingsPage() {
 
   useEffect(() => {
     refreshFolders();
+    // In a real app, you might fetch existing global settings here
+    // For now, we'll use local state initialized above
   }, [refreshFolders]);
 
   const handleCreateFolder = () => {
@@ -198,12 +205,23 @@ export default function SettingsPage() {
             <CardContent className="space-y-6">
                <div className="space-y-2">
                 <Label htmlFor="prometheusUrl">Default Prometheus URL (Optional)</Label>
-                <Input id="prometheusUrl" placeholder="http://localhost:9090" />
+                <Input 
+                  id="prometheusUrl" 
+                  value={defaultPrometheusUrl}
+                  onChange={(e) => setDefaultPrometheusUrl(e.target.value)}
+                  placeholder="http://localhost:9090" 
+                />
                  <p className="text-xs text-muted-foreground">Global fallback if not specified per asset.</p>
               </div>
               <div className="space-y-2">
                 <Label htmlFor="defaultScrapeInterval">Default Scrape Interval</Label>
-                <Input id="defaultScrapeInterval" defaultValue="15s" />
+                <Input 
+                  id="defaultScrapeInterval" 
+                  value={defaultScrapeInterval}
+                  onChange={(e) => setDefaultScrapeInterval(e.target.value)}
+                  placeholder="e.g., 15s, 1m"
+                />
+                 <p className="text-xs text-muted-foreground">Global default scrape interval for assets (e.g., '15s', '1m'). Overridden by asset-specific configuration.</p>
               </div>
             </CardContent>
              <CardFooter className="border-t border-[hsl(var(--glass-border-light))] pt-6">
@@ -275,3 +293,4 @@ export default function SettingsPage() {
     </AppLayout>
   );
 }
+
