@@ -32,6 +32,13 @@ export interface FormData {
   // prometheus_config is generated, not a direct form field
 }
 
+// Permission Type
+export interface Permission {
+  id: string;
+  name: string;
+  description: string;
+}
+
 // User and Group Types
 export interface User {
   id: string;
@@ -39,6 +46,7 @@ export interface User {
   email: string;
   role: 'Admin' | 'Editor' | 'Viewer'; // Example roles
   groupIds?: string[]; // IDs of groups the user belongs to
+  permissionIds?: string[]; // IDs of specific permissions granted to the user
 }
 
 export interface Group {

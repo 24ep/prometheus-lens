@@ -1,6 +1,18 @@
 
-import type { Asset, AssetFolder, User, Group } from '@/types';
+import type { Asset, AssetFolder, User, Group, Permission } from '@/types';
 import { formatISO } from 'date-fns';
+
+// Available Permissions
+export const availablePermissions: Permission[] = [
+  { id: 'perm-view-assets', name: 'View Assets', description: 'Allows viewing all asset details and configurations.' },
+  { id: 'perm-edit-assets', name: 'Edit Assets', description: 'Allows editing asset configurations, tags, and metadata.' },
+  { id: 'perm-delete-assets', name: 'Delete Assets', description: 'Allows deleting assets from the system.' },
+  { id: 'perm-manage-folders', name: 'Manage Folders', description: 'Allows creating, editing, and deleting asset folders.' },
+  { id: 'perm-manage-users', name: 'Manage Users & Groups', description: 'Allows creating, editing, and deleting users and groups.' },
+  { id: 'perm-manage-settings', name: 'Manage Settings', description: 'Allows changing global application settings.' },
+  { id: 'perm-test-connections', name: 'Test Connections', description: 'Allows initiating connection tests for assets.' },
+];
+
 
 export let mockFoldersData: AssetFolder[] = [
   { id: 'folder-1', name: 'Production Servers' },
@@ -159,9 +171,9 @@ export const addAsset = (assetData: Omit<Asset, 'id' | 'lastChecked' | 'status'>
 
 // User and Group Mock Data
 export let mockUsersData: User[] = [
-  { id: 'user-1', name: 'Alice Wonderland', email: 'alice@example.com', role: 'Admin', groupIds: ['group-admin'] },
-  { id: 'user-2', name: 'Bob The Builder', email: 'bob@example.com', role: 'Editor', groupIds: ['group-editors', 'group-dev'] },
-  { id: 'user-3', name: 'Charlie Brown', email: 'charlie@example.com', role: 'Viewer', groupIds: ['group-viewers'] },
+  { id: 'user-1', name: 'Alice Wonderland', email: 'alice@example.com', role: 'Admin', groupIds: ['group-admin'], permissionIds: availablePermissions.map(p => p.id) }, // Admin has all permissions
+  { id: 'user-2', name: 'Bob The Builder', email: 'bob@example.com', role: 'Editor', groupIds: ['group-editors', 'group-dev'], permissionIds: ['perm-view-assets', 'perm-edit-assets', 'perm-test-connections', 'perm-manage-folders'] },
+  { id: 'user-3', name: 'Charlie Brown', email: 'charlie@example.com', role: 'Viewer', groupIds: ['group-viewers'], permissionIds: ['perm-view-assets'] },
 ];
 
 export let mockGroupsData: Group[] = [
@@ -182,7 +194,7 @@ export const updateUser = (userId: string, userData: Partial<Omit<User, 'id'>>):
   let updatedUser: User | undefined;
   mockUsersData = mockUsersData.map(user => {
     if (user.id === userId) {
-      updatedUser = { ...user, ...userData };
+      updatedUser = { ...user, ...userData }; // Ensure all fields from userData are applied
       return updatedUser;
     }
     return user;
@@ -232,4 +244,8 @@ export const getGroupById = (groupId: string): Group | undefined => {
 
 export const getUserById = (userId: string): User | undefined => {
     return mockUsersData.find(u => u.id === userId);
+};
+
+export const getPermissionById = (permissionId: string): Permission | undefined => {
+    return availablePermissions.find(p => p.id === permissionId);
 };
