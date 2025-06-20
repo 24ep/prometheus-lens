@@ -188,9 +188,9 @@ export default function AssetDetailsPage() {
                     <CardContent>
                         {instructionSteps.length > 0 ? (
                             <ScrollArea className="h-60 w-full rounded-md p-1">
-                                <ol className="list-decimal list-inside space-y-2 text-sm text-muted-foreground pl-1">
+                                <ol className="list-decimal list-inside space-y-4 text-sm text-muted-foreground">
                                     {instructionSteps.map((step, index) => (
-                                    <li key={index} dangerouslySetInnerHTML={{ __html: step.replace(/```yaml\n([\s\S]*?)\n```/g, '<pre class="bg-muted/50 p-2 rounded-md text-xs font-code my-1 whitespace-pre-wrap">$1</pre>').replace(/`([^`]+)`/g, '<code class="bg-muted/50 px-1 py-0.5 rounded-sm text-xs font-code">$1</code>') }}></li>
+                                    <li key={index} className="p-4 border rounded-lg bg-card shadow-sm" dangerouslySetInnerHTML={{ __html: step }}></li>
                                     ))}
                                 </ol>
                             </ScrollArea>

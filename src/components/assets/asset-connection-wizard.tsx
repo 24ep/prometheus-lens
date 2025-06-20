@@ -284,9 +284,9 @@ export function AssetConnectionWizard({ onSaveComplete }: AssetConnectionWizardP
                   <Label className="font-semibold block mb-1.5">Connection Instructions for {watchedType}</Label>
                   <ScrollArea className="h-56 w-full rounded-md border p-3 bg-muted/20">
                     {instructionSteps.length > 0 ? (
-                      <ol className="list-decimal list-inside space-y-3 text-sm">
+                       <ol className="list-decimal list-inside space-y-4 text-sm">
                         {instructionSteps.map((step, index) => (
-                           <li key={index} dangerouslySetInnerHTML={{ __html: step.replace(/```yaml\n([\s\S]*?)\n```/g, '<pre class="bg-muted/50 p-2 rounded-md text-xs font-code my-1 whitespace-pre-wrap">$1</pre>').replace(/`([^`]+)`/g, '<code class="bg-muted/50 px-1 py-0.5 rounded-sm text-xs font-code">$1</code>') }}></li>
+                           <li key={index} className="p-4 border rounded-lg bg-card shadow-sm" dangerouslySetInnerHTML={{ __html: step }}></li>
                         ))}
                       </ol>
                     ) : (
