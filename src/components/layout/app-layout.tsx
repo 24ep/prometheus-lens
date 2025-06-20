@@ -27,6 +27,7 @@ import {
   Moon,
   Sun,
   Package,
+  FileText, // Added icon for config preview
 } from 'lucide-react';
 import { useTheme } from 'next-themes';
 import React from 'react';
@@ -34,6 +35,7 @@ import React from 'react';
 const navItems = [
   { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { href: '/', label: 'All Assets', icon: Package },
+  { href: '/prometheus-config', label: 'Config Preview', icon: FileText }, // New navigation item
   { type: 'separator' as const },
   { href: '/settings/users', label: 'Users & Groups', icon: Users, disabled: false },
   { href: '/settings', label: 'Settings', icon: Settings },
@@ -54,6 +56,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
     if (activeItem) return activeItem.label;
     if (pathname.startsWith('/assets/')) return 'Asset Details';
     if (pathname.startsWith('/settings/users')) return 'Users & Groups';
+    if (pathname === '/prometheus-config') return 'Prometheus Configuration';
     return 'Prometheus Lens';
   }
 
