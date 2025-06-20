@@ -2,7 +2,6 @@
 "use client";
 
 import type { Asset, AssetFolder } from '@/types';
-import { mockFoldersData, updateAssetConfiguration } from '@/lib/mock-data';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
@@ -20,11 +19,11 @@ import { Separator } from '../ui/separator';
 
 interface AssetDetailsDialogProps {
   asset: Asset | null;
-  allFolders: AssetFolder[];
+  allFolders: AssetFolder[]; // Keep receiving all folders for now, could be optimized later
   isOpen: boolean;
   onOpenChange: (isOpen: boolean) => void;
-  onSaveDetails: (assetId: string, details: { tags: string[], grafanaLink?: string }) => void;
-  onConfigurationSave: (updatedAsset: Asset) => void;
+  onSaveDetails: (assetId: string, details: { tags: string[], grafanaLink?: string }) => void; // This will call PUT /api/assets/[id]
+  onConfigurationSave: (updatedAsset: Asset) => void; // This will pass the updated asset after PUT /api/assets/[id]/configuration
 }
 
 export function AssetDetailsDialog({ asset, allFolders, isOpen, onOpenChange, onSaveDetails, onConfigurationSave }: AssetDetailsDialogProps) {
@@ -33,25 +32,25 @@ export function AssetDetailsDialog({ asset, allFolders, isOpen, onOpenChange, on
   const [tagInput, setTagInput] = useState('');
   const [grafanaLinkInput, setGrafanaLinkInput] = useState('');
   const [isEditConfigOpen, setIsEditConfigOpen] = useState(false);
-  const [currentAssetForEdit, setCurrentAssetForEdit] = useState<Asset | null>(null);
+  const [currentAssetForDialog, setCurrentAssetForDialog] = useState<Asset | null>(null); // Used to manage state within the dialog
 
   useEffect(() => {
     if (asset) {
-      setCurrentAssetForEdit(asset);
+      setCurrentAssetForDialog(JSON.parse(JSON.stringify(asset))); // Deep copy to avoid modifying prop directly
       setCurrentTags(asset.tags ? [...asset.tags] : []);
       setGrafanaLinkInput(asset.grafanaLink || '');
     } else {
+      setCurrentAssetForDialog(null);
       setCurrentTags([]);
       setGrafanaLinkInput('');
-      setCurrentAssetForEdit(null);
     }
     setTagInput(''); 
   }, [asset, isOpen]);
 
-  if (!asset) return null;
+  if (!currentAssetForDialog) return null; // Use currentAssetForDialog for rendering
 
-  const instructionSteps = getMockInstructions(asset.type);
-  const folderName = asset.folderId ? allFolders.find(f => f.id === asset.folderId)?.name : 'N/A';
+  const instructionSteps = getMockInstructions(currentAssetForDialog.type);
+  const folderName = currentAssetForDialog.folderId ? allFolders.find(f => f.id === currentAssetForDialog.folderId)?.name : 'N/A';
 
   const handleAddTag = () => {
     if (tagInput.trim() === '') return;
@@ -67,35 +66,46 @@ export function AssetDetailsDialog({ asset, allFolders, isOpen, onOpenChange, on
   };
 
   const handleSaveDetailsLocal = () => {
-    onSaveDetails(asset.id, { tags: currentTags, grafanaLink: grafanaLinkInput.trim() });
-    toast({ title: "Details Updated", description: `Details for ${asset.name} saved.` });
+    // This calls the prop which should handle the API call
+    onSaveDetails(currentAssetForDialog.id, { tags: currentTags, grafanaLink: grafanaLinkInput.trim() });
+    // Toast is handled by the parent component after successful API call
   };
 
   const handleOpenEditConfig = () => {
     setIsEditConfigOpen(true);
   };
   
-  const handleSaveConfiguration = (assetId: string, newConfiguration: Record<string, any>) => {
-    const updatedAsset = updateAssetConfiguration(assetId, newConfiguration);
-    if (updatedAsset) {
-      setCurrentAssetForEdit(updatedAsset); 
-      onConfigurationSave(updatedAsset); 
-      setGrafanaLinkInput(updatedAsset.grafanaLink || ''); 
-      toast({ title: "Configuration Saved", description: `Configuration for ${updatedAsset.name} has been updated.` });
-    } else {
-      toast({ title: "Error", description: "Failed to save configuration.", variant: "destructive" });
+  const handleDialogSaveConfiguration = async (assetId: string, newConfiguration: Record<string, any>) => {
+    // API call is now made here directly
+    try {
+        const response = await fetch(`/api/assets/${assetId}/configuration`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(newConfiguration),
+        });
+        if (!response.ok) {
+            const errorData = await response.json();
+            throw new Error(errorData.error || `Failed to save configuration: ${response.statusText}`);
+        }
+        const updatedAsset: Asset = await response.json();
+        setCurrentAssetForDialog(updatedAsset); // Update dialog's internal state
+        onConfigurationSave(updatedAsset); // Propagate to parent
+        toast({ title: "Configuration Saved", description: `Configuration for ${updatedAsset.name} has been updated.` });
+    } catch (error) {
+        console.error("Error saving configuration:", error);
+        toast({ title: "Error", description: (error as Error).message, variant: "destructive"});
     }
     setIsEditConfigOpen(false);
   };
 
   const handleDownloadYaml = () => {
-    if (!currentAssetForEdit || !currentAssetForEdit.configuration) {
+    if (!currentAssetForDialog || !currentAssetForDialog.configuration) {
       toast({ title: "Error", description: "Asset configuration not available for download.", variant: "destructive"});
       return;
     }
 
-    const filename = `${currentAssetForEdit.name.toLowerCase().replace(/\s+/g, '_') || 'prometheus_config'}.yaml`;
-    const yamlContent = JSON.stringify({ scrape_configs: [currentAssetForEdit.configuration] }, null, 2);
+    const filename = `${currentAssetForDialog.name.toLowerCase().replace(/\s+/g, '_') || 'prometheus_config'}.yaml`;
+    const yamlContent = JSON.stringify({ scrape_configs: [currentAssetForDialog.configuration] }, null, 2);
     
     const blob = new Blob([yamlContent], { type: 'application/x-yaml' });
     const url = URL.createObjectURL(blob);
@@ -116,12 +126,12 @@ export function AssetDetailsDialog({ asset, allFolders, isOpen, onOpenChange, on
           <DialogHeader className="p-6 pb-4 border-b">
             <div className="flex flex-col sm:flex-row justify-between items-start gap-2">
               <div>
-                <DialogTitle className="font-headline text-2xl">{currentAssetForEdit?.name}</DialogTitle>
-                <DialogDescription className="text-base">{currentAssetForEdit?.type} Asset</DialogDescription>
+                <DialogTitle className="font-headline text-2xl">{currentAssetForDialog.name}</DialogTitle>
+                <DialogDescription className="text-base">{currentAssetForDialog.type} Asset</DialogDescription>
               </div>
               <div className="flex gap-2 mt-2 sm:mt-0">
-                {currentAssetForEdit?.grafanaLink ? (
-                  <a href={currentAssetForEdit.grafanaLink} target="_blank" rel="noopener noreferrer">
+                {currentAssetForDialog.grafanaLink ? (
+                  <a href={currentAssetForDialog.grafanaLink} target="_blank" rel="noopener noreferrer">
                     <Button size="sm"><ExternalLink className="mr-2 h-4 w-4" />Open in Grafana</Button>
                   </a>
                 ) : (
@@ -151,8 +161,8 @@ export function AssetDetailsDialog({ asset, allFolders, isOpen, onOpenChange, on
               <TabsContent value="overview" className="mt-0 space-y-4">
                 <div className="p-4 rounded-lg border bg-card/50">
                     <h3 className="font-headline text-lg mb-2">Connection Status</h3>
-                    <div>Status: <Badge variant={currentAssetForEdit?.status === 'connected' ? 'default' : currentAssetForEdit?.status === 'error' ? 'destructive' : 'secondary'} className="capitalize">{currentAssetForEdit?.status}</Badge></div>
-                    <p className="mt-1 text-sm text-muted-foreground">Last Checked: {currentAssetForEdit && new Date(currentAssetForEdit.lastChecked).toLocaleString()}</p>
+                    <div>Status: <Badge variant={currentAssetForDialog.status === 'connected' ? 'default' : currentAssetForDialog.status === 'error' ? 'destructive' : 'secondary'} className="capitalize">{currentAssetForDialog.status}</Badge></div>
+                    <p className="mt-1 text-sm text-muted-foreground">Last Checked: {currentAssetForDialog && new Date(currentAssetForDialog.lastChecked).toLocaleString()}</p>
                 </div>
                  <div className="p-4 rounded-lg border bg-card/50">
                     <h3 className="font-headline text-lg mb-2">Key Metrics (Placeholder)</h3>
@@ -168,8 +178,8 @@ export function AssetDetailsDialog({ asset, allFolders, isOpen, onOpenChange, on
                     <h3 className="font-headline text-lg">Connection Instructions</h3>
                   </div>
                   {instructionSteps.length > 0 ? (
-                    <ScrollArea className="h-64 w-full rounded-md p-1">
-                        <div className="text-sm">
+                     <ScrollArea className="h-64 w-full rounded-md p-1">
+                        <div className="text-sm space-y-6">
                         {instructionSteps.map((stepHtml, index) => (
                             <React.Fragment key={index}>
                                 <div dangerouslySetInnerHTML={{ __html: stepHtml }} />
@@ -195,7 +205,7 @@ export function AssetDetailsDialog({ asset, allFolders, isOpen, onOpenChange, on
                             <Button variant="outline" size="sm" onClick={handleOpenEditConfig}>
                                 <Edit className="mr-2 h-4 w-4"/>Edit
                             </Button>
-                            <Button variant="outline" size="sm" onClick={handleDownloadYaml} disabled={!currentAssetForEdit?.configuration}>
+                            <Button variant="outline" size="sm" onClick={handleDownloadYaml} disabled={!currentAssetForDialog.configuration}>
                               <Download className="mr-2 h-4 w-4" />
                               YAML
                             </Button>
@@ -203,7 +213,7 @@ export function AssetDetailsDialog({ asset, allFolders, isOpen, onOpenChange, on
                     </div>
                     <ScrollArea className="h-60 w-full rounded-md border p-3 bg-muted/20">
                         <pre className="text-xs font-code whitespace-pre-wrap">
-                            {currentAssetForEdit && JSON.stringify({ scrape_configs: [currentAssetForEdit.configuration] }, null, 2)}
+                            {currentAssetForDialog && JSON.stringify({ scrape_configs: [currentAssetForDialog.configuration] }, null, 2)}
                         </pre>
                     </ScrollArea>
                 </div>
@@ -213,8 +223,8 @@ export function AssetDetailsDialog({ asset, allFolders, isOpen, onOpenChange, on
                  <div className="p-4 rounded-lg border bg-card/50">
                     <h3 className="font-headline text-lg mb-3">Asset Details</h3>
                     <div className="space-y-1.5 text-sm">
-                        <p><strong>ID:</strong> <span className="text-muted-foreground">{asset.id}</span></p>
-                        <p><strong>Type:</strong> <span className="text-muted-foreground">{asset.type}</span></p>
+                        <p><strong>ID:</strong> <span className="text-muted-foreground">{currentAssetForDialog.id}</span></p>
+                        <p><strong>Type:</strong> <span className="text-muted-foreground">{currentAssetForDialog.type}</span></p>
                         <p><strong>Folder:</strong> <span className="text-muted-foreground">{folderName || 'Uncategorized'}</span></p>
                     </div>
                 </div>
@@ -276,12 +286,12 @@ export function AssetDetailsDialog({ asset, allFolders, isOpen, onOpenChange, on
         </DialogContent>
       </Dialog>
 
-      {currentAssetForEdit && (
+      {currentAssetForDialog && (
         <EditAssetConfigurationDialog
-          asset={currentAssetForEdit}
+          asset={currentAssetForDialog}
           isOpen={isEditConfigOpen}
           onOpenChange={setIsEditConfigOpen}
-          onSaveConfiguration={handleSaveConfiguration}
+          onSaveConfiguration={handleDialogSaveConfiguration} // Use the dialog's own save handler
         />
       )}
     </>

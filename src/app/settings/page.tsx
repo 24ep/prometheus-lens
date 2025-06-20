@@ -8,8 +8,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
-import { mockFoldersData, addFolder, updateFolder as updateMockFolder, deleteFolder as deleteMockFolderFromData, mockAssetsData } from '@/lib/mock-data';
-import type { AssetFolder, Asset } from '@/types';
+import type { AssetFolder } from '@/types';
 import { PlusCircle, Edit2, Trash2, Folder as FolderIcon, ChevronDown, ChevronRight } from 'lucide-react';
 import { ManageFolderDialog } from '@/components/folders/manage-folder-dialog';
 import { ConfirmDialog } from '@/components/common/confirm-dialog';
@@ -17,7 +16,6 @@ import { useToast } from '@/hooks/use-toast';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { cn } from '@/lib/utils';
 
-// Reusable FolderTreeItem for settings page (without assets)
 interface SettingsFolderTreeItemProps {
   folder: AssetFolder;
   allFolders: AssetFolder[];
@@ -67,7 +65,7 @@ const SettingsFolderTreeItem: React.FC<SettingsFolderTreeItemProps> = ({
               key={child.id}
               folder={child}
               allFolders={allFolders}
-              level={0} // Child items are effectively level 0 relative to their parent in this flat recursive call
+              level={0} 
               onEditFolder={onEditFolder}
               onDeleteFolder={onDeleteFolder}
               initiallyOpen={false}
@@ -83,25 +81,37 @@ const SettingsFolderTreeItem: React.FC<SettingsFolderTreeItemProps> = ({
 export default function SettingsPage() {
   const { toast } = useToast();
   const [folders, setFolders] = useState<AssetFolder[]>([]);
+  const [isLoadingFolders, setIsLoadingFolders] = useState(true);
   const [isManageFolderDialogOpen, setIsManageFolderDialogOpen] = useState(false);
   const [folderToEdit, setFolderToEdit] = useState<AssetFolder | null>(null);
   const [isConfirmDeleteFolderDialogOpen, setIsConfirmDeleteFolderDialogOpen] = useState(false);
   const [folderToDelete, setFolderToDelete] = useState<AssetFolder | null>(null);
 
-  // Example state for integration settings - in a real app, these would be fetched/saved
   const [defaultPrometheusUrl, setDefaultPrometheusUrl] = useState("http://localhost:9090");
   const [defaultScrapeInterval, setDefaultScrapeInterval] = useState("15s");
 
 
-  const refreshFolders = useCallback(() => {
-    setFolders([...mockFoldersData].sort((a, b) => a.name.localeCompare(b.name)));
-  }, []);
+  const refreshFolders = useCallback(async () => {
+    setIsLoadingFolders(true);
+    try {
+      const response = await fetch('/api/folders');
+      if (!response.ok) {
+        throw new Error('Failed to fetch folders');
+      }
+      const data: AssetFolder[] = await response.json();
+      setFolders(data.sort((a, b) => a.name.localeCompare(b.name)));
+    } catch (error) {
+      console.error("Error fetching folders:", error);
+      toast({ title: "Error", description: (error as Error).message, variant: "destructive" });
+      setFolders([]);
+    } finally {
+      setIsLoadingFolders(false);
+    }
+  }, [toast]);
 
 
   useEffect(() => {
     refreshFolders();
-    // In a real app, you might fetch existing global settings here
-    // For now, we'll use local state initialized above
   }, [refreshFolders]);
 
   const handleCreateFolder = () => {
@@ -119,29 +129,50 @@ export default function SettingsPage() {
     setIsConfirmDeleteFolderDialogOpen(true);
   };
 
-  const handleSaveFolder = (folderData: { id?: string; name: string; parentId?: string }) => {
-    if (folderData.id) {
-      const updated = updateMockFolder(folderData.id, folderData.name, folderData.parentId);
-      if (updated) {
-        toast({ title: "Folder Updated", description: `Folder "${updated.name}" saved.` });
+  const handleSaveFolder = async (folderData: { id?: string; name: string; parentId?: string }) => {
+    const url = folderData.id ? `/api/folders/${folderData.id}` : '/api/folders';
+    const method = folderData.id ? 'PUT' : 'POST';
+    try {
+      const response = await fetch(url, {
+        method: method,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: folderData.name, parentId: folderData.parentId }),
+      });
+
+      if (!response.ok) {
+        const errorResult = await response.json();
+        throw new Error(errorResult.error || 'Failed to save folder');
       }
-    } else {
-      const newF = addFolder(folderData.name, folderData.parentId);
-      toast({ title: "Folder Created", description: `Folder "${newF.name}" added.` });
+      const savedFolder: AssetFolder = await response.json();
+      
+      if (folderData.id) {
+        setFolders(prev => prev.map(f => f.id === savedFolder.id ? savedFolder : f).sort((a,b) => a.name.localeCompare(b.name)));
+        toast({ title: "Folder Updated", description: `Folder "${savedFolder.name}" saved.` });
+      } else {
+        setFolders(prev => [...prev, savedFolder].sort((a,b) => a.name.localeCompare(b.name)));
+        toast({ title: "Folder Created", description: `Folder "${savedFolder.name}" added.` });
+      }
+    } catch (error) {
+      console.error("Error saving folder:", error);
+      toast({ title: "Error", description: (error as Error).message, variant: "destructive" });
     }
-    refreshFolders();
     setIsManageFolderDialogOpen(false);
     setFolderToEdit(null);
   };
 
-  const confirmDeleteFolderAction = () => {
+  const confirmDeleteFolderAction = async () => {
     if (folderToDelete) {
-      const success = deleteMockFolderFromData(folderToDelete.id); // This also handles unassigning assets in mock-data
-      if (success) {
-        toast({ title: "Folder Deleted", description: `Folder "${folderToDelete.name}" removed.` });
-        refreshFolders();
-      } else {
-        toast({ title: "Error", description: "Could not delete folder.", variant: "destructive" });
+       try {
+        const response = await fetch(`/api/folders/${folderToDelete.id}`, { method: 'DELETE' });
+        if (!response.ok) {
+          const errorResult = await response.json();
+          throw new Error(errorResult.error || "Could not delete folder.");
+        }
+        toast({ title: "Folder Deleted", description: `Folder "${folderToDelete.name}" removed.`});
+        await refreshFolders(); // Re-fetch folders to update list and any parent/child relationships
+      } catch (error) {
+         console.error("Error deleting folder:", error);
+         toast({ title: "Error", description: (error as Error).message, variant: "destructive"});
       }
     }
     setIsConfirmDeleteFolderDialogOpen(false);
@@ -240,10 +271,12 @@ export default function SettingsPage() {
               </Button>
             </CardHeader>
             <CardContent>
-              {folders.length === 0 ? (
+              {isLoadingFolders ? (
+                <p className="text-muted-foreground text-center py-4">Loading folders...</p>
+              ) : folders.length === 0 ? (
                 <p className="text-muted-foreground text-center py-4">No folders created yet.</p>
               ) : (
-                <ScrollArea className="h-80"> {/* Adjusted height */}
+                <ScrollArea className="h-80">
                   <div className="space-y-1 pr-2">
                     {rootFolders.map(folder => (
                       <SettingsFolderTreeItem
@@ -253,7 +286,7 @@ export default function SettingsPage() {
                         level={0}
                         onEditFolder={handleEditFolder}
                         onDeleteFolder={handleDeleteFolder}
-                        initiallyOpen={true} // Open root folders by default in settings
+                        initiallyOpen={true} 
                       />
                     ))}
                   </div>
@@ -293,4 +326,3 @@ export default function SettingsPage() {
     </AppLayout>
   );
 }
-

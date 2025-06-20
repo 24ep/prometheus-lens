@@ -1,14 +1,14 @@
 
 "use client";
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { AppLayout } from '@/components/layout/app-layout';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { mockAssetsData } from '@/lib/mock-data';
 import type { Asset } from '@/types';
 import { CheckCircle2, XCircle, AlertTriangle, Hourglass, Package, Link2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import Link from 'next/link';
+import { useToast } from '@/hooks/use-toast';
 
 interface DashboardStats {
   totalAssets: number;
@@ -26,19 +26,39 @@ export default function DashboardOverviewPage() {
     error: 0,
     pending: 0,
   });
+  const [isLoading, setIsLoading] = useState(true);
+  const { toast } = useToast();
+
+  const fetchDashboardData = useCallback(async () => {
+    setIsLoading(true);
+    try {
+      const response = await fetch('/api/assets');
+      if (!response.ok) {
+        throw new Error('Failed to fetch assets for dashboard');
+      }
+      const assetsData: Asset[] = await response.json();
+      
+      const newStats: DashboardStats = {
+        totalAssets: assetsData.length,
+        connected: assetsData.filter(asset => asset.status === 'connected').length,
+        disconnected: assetsData.filter(asset => asset.status === 'disconnected').length,
+        error: assetsData.filter(asset => asset.status === 'error').length,
+        pending: assetsData.filter(asset => asset.status === 'pending').length,
+      };
+      setStats(newStats);
+
+    } catch (error) {
+      console.error("Error fetching dashboard data:", error);
+      toast({ title: "Error", description: (error as Error).message, variant: "destructive" });
+      setStats({ totalAssets: 0, connected: 0, disconnected: 0, error: 0, pending: 0 });
+    } finally {
+      setIsLoading(false);
+    }
+  }, [toast]);
 
   useEffect(() => {
-    // Calculate stats from mock data on client side
-    // In a real app, this might be fetched from an API
-    const newStats: DashboardStats = {
-      totalAssets: mockAssetsData.length,
-      connected: mockAssetsData.filter(asset => asset.status === 'connected').length,
-      disconnected: mockAssetsData.filter(asset => asset.status === 'disconnected').length,
-      error: mockAssetsData.filter(asset => asset.status === 'error').length,
-      pending: mockAssetsData.filter(asset => asset.status === 'pending').length,
-    };
-    setStats(newStats);
-  }, []);
+    fetchDashboardData();
+  }, [fetchDashboardData]);
 
   const statItems = [
     { title: 'Total Assets', value: stats.totalAssets, icon: Package, color: 'text-primary' },
@@ -47,6 +67,16 @@ export default function DashboardOverviewPage() {
     { title: 'Errors', value: stats.error, icon: AlertTriangle, color: 'text-amber-500' },
     { title: 'Pending', value: stats.pending, icon: Hourglass, color: 'text-blue-500' },
   ];
+
+  if (isLoading) {
+    return (
+      <AppLayout>
+        <div className="text-center py-10">
+          <p>Loading dashboard data...</p>
+        </div>
+      </AppLayout>
+    );
+  }
 
   return (
     <AppLayout>
@@ -80,28 +110,8 @@ export default function DashboardOverviewPage() {
               <Package className="mr-2 h-4 w-4" /> View All Assets
             </Button>
           </Link>
-           {/* The "Add Item" button is already on the All Assets page, which might be better. 
-               Or, if kept here, it would need to trigger the dialogs from this page.
-               For simplicity, we'll link to All Assets page where creation happens. 
-           */}
         </CardContent>
       </Card>
-      
-      {/* Placeholder for future charts or more detailed summaries */}
-      {/* 
-      <div className="mt-8">
-        <Card>
-          <CardHeader>
-            <CardTitle className="font-headline text-xl">Asset Status Trends (Placeholder)</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="text-muted-foreground">Charts showing asset status over time would appear here.</p>
-             <img src="https://placehold.co/800x300.png?text=Asset+Status+Chart" alt="Placeholder chart" data-ai-hint="chart graph" className="w-full h-auto rounded-md mt-2"/>
-          </CardContent>
-        </Card>
-      </div>
-      */}
-
     </AppLayout>
   );
 }

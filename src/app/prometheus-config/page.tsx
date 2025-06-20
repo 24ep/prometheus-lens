@@ -1,12 +1,11 @@
 
 "use client";
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { AppLayout } from '@/components/layout/app-layout';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { mockAssetsData } from '@/lib/mock-data';
 import type { Asset } from '@/types';
 import { Download, Copy } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
@@ -14,27 +13,47 @@ import { useToast } from '@/hooks/use-toast';
 export default function PrometheusConfigPage() {
   const { toast } = useToast();
   const [aggregatedConfigString, setAggregatedConfigString] = useState<string>('');
+  const [isLoading, setIsLoading] = useState(true);
+
+  const fetchAssetConfigs = useCallback(async () => {
+    setIsLoading(true);
+    try {
+      const response = await fetch('/api/assets');
+      if (!response.ok) {
+        throw new Error('Failed to fetch asset configurations');
+      }
+      const assetsData: Asset[] = await response.json();
+
+      const validConfigs = assetsData
+        .filter(asset => asset.configuration && Object.keys(asset.configuration).length > 0)
+        .map(asset => asset.configuration);
+
+      const fullConfig = {
+        scrape_configs: validConfigs,
+      };
+
+      setAggregatedConfigString(JSON.stringify(fullConfig, null, 2));
+    } catch (error) {
+      console.error("Error fetching asset configs:", error);
+      toast({ title: "Error", description: (error as Error).message, variant: "destructive" });
+      setAggregatedConfigString("Error loading configurations.");
+    } finally {
+      setIsLoading(false);
+    }
+  }, [toast]);
 
   useEffect(() => {
-    const validConfigs = mockAssetsData
-      .filter(asset => asset.configuration && Object.keys(asset.configuration).length > 0)
-      .map(asset => asset.configuration);
-
-    const fullConfig = {
-      scrape_configs: validConfigs,
-    };
-
-    setAggregatedConfigString(JSON.stringify(fullConfig, null, 2));
-  }, []);
+    fetchAssetConfigs();
+  }, [fetchAssetConfigs]);
 
   const handleDownloadYaml = () => {
-    if (!aggregatedConfigString) {
+    if (!aggregatedConfigString || aggregatedConfigString.startsWith("Error loading")) {
       toast({ title: "Error", description: "No configuration available to download.", variant: "destructive"});
       return;
     }
 
     const filename = 'prometheus_full_config.yml';
-    const blob = new Blob([aggregatedConfigString], { type: 'application/json' }); // Or application/x-yaml if truly YAML
+    const blob = new Blob([aggregatedConfigString], { type: 'application/json' }); 
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
@@ -47,7 +66,7 @@ export default function PrometheusConfigPage() {
   };
 
   const handleCopyToClipboard = () => {
-    if (!aggregatedConfigString) {
+    if (!aggregatedConfigString || aggregatedConfigString.startsWith("Error loading")) {
       toast({ title: "Error", description: "No configuration to copy.", variant: "destructive"});
       return;
     }
@@ -79,10 +98,10 @@ export default function PrometheusConfigPage() {
                 <CardDescription>Review and use the combined configuration below.</CardDescription>
             </div>
             <div className="flex gap-2 mt-2 sm:mt-0">
-              <Button variant="outline" onClick={handleCopyToClipboard} disabled={!aggregatedConfigString}>
+              <Button variant="outline" onClick={handleCopyToClipboard} disabled={isLoading || !aggregatedConfigString || aggregatedConfigString.startsWith("Error loading")}>
                 <Copy className="mr-2 h-4 w-4" /> Copy to Clipboard
               </Button>
-              <Button onClick={handleDownloadYaml} disabled={!aggregatedConfigString}>
+              <Button onClick={handleDownloadYaml} disabled={isLoading || !aggregatedConfigString || aggregatedConfigString.startsWith("Error loading")}>
                 <Download className="mr-2 h-4 w-4" /> Download Full YAML
               </Button>
             </div>
@@ -91,7 +110,7 @@ export default function PrometheusConfigPage() {
         <CardContent>
           <ScrollArea className="h-[calc(100vh-var(--header-height,4rem)-22rem)] md:h-[500px] w-full rounded-md border p-3 bg-muted/30">
             <pre className="text-sm font-code whitespace-pre-wrap">
-              {aggregatedConfigString ? aggregatedConfigString : "No asset configurations found or processed."}
+              {isLoading ? "Loading configurations..." : (aggregatedConfigString || "No asset configurations found or processed.")}
             </pre>
           </ScrollArea>
         </CardContent>

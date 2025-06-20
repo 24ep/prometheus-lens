@@ -1,12 +1,11 @@
 
 "use client";
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { AppLayout } from '@/components/layout/app-layout';
 import { useParams } from 'next/navigation';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
-import { mockAssetsData, mockFoldersData, updateAssetConfiguration as updateMockAssetConfiguration } from '@/lib/mock-data';
-import type { Asset } from '@/types';
+import type { Asset, AssetFolder } from '@/types';
 import { Button } from '@/components/ui/button';
 import Link from 'next/link';
 import { ArrowLeft, Edit, ExternalLink, TestTubeDiagonal, Download, Settings2, FileText } from 'lucide-react';
@@ -22,21 +21,72 @@ export default function AssetDetailsPage() {
   const assetId = params.id as string;
   const { toast } = useToast();
 
-  const [asset, setAsset] = useState<Asset | null | undefined>(undefined);
+  const [asset, setAsset] = useState<Asset | null | undefined>(undefined); // undefined for loading state
+  const [folder, setFolder] = useState<AssetFolder | null>(null);
   const [isEditConfigOpen, setIsEditConfigOpen] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+
+  const fetchAssetAndFolderData = useCallback(async () => {
+    setIsLoading(true);
+    if (!assetId) {
+        setAsset(null); // No ID, so no asset
+        setIsLoading(false);
+        return;
+    }
+    try {
+      const assetRes = await fetch(`/api/assets/${assetId}`);
+      if (!assetRes.ok) {
+        if (assetRes.status === 404) {
+          setAsset(null);
+        } else {
+          throw new Error(`Failed to fetch asset: ${assetRes.statusText}`);
+        }
+      } else {
+        const fetchedAsset: Asset = await assetRes.json();
+        setAsset(fetchedAsset);
+        if (fetchedAsset.folderId) {
+          const folderRes = await fetch(`/api/folders/${fetchedAsset.folderId}`);
+          if (folderRes.ok) {
+            const fetchedFolder: AssetFolder = await folderRes.json();
+            setFolder(fetchedFolder);
+          } else {
+            console.warn(`Failed to fetch folder ${fetchedAsset.folderId}`);
+            setFolder(null);
+          }
+        } else {
+          setFolder(null);
+        }
+      }
+    } catch (error) {
+      console.error("Error fetching asset details:", error);
+      toast({ title: "Error", description: `Could not load asset: ${(error as Error).message}`, variant: "destructive" });
+      setAsset(null); // Error state
+    } finally {
+      setIsLoading(false);
+    }
+  }, [assetId, toast]);
 
   useEffect(() => {
-    const foundAsset = mockAssetsData.find(a => a.id === assetId);
-    setAsset(foundAsset || null);
-  }, [assetId]);
+    fetchAssetAndFolderData();
+  }, [fetchAssetAndFolderData]);
 
-  const handleSaveConfiguration = (id: string, newConfiguration: Record<string, any>) => {
-    const updatedAsset = updateMockAssetConfiguration(id, newConfiguration);
-    if (updatedAsset) {
-      setAsset(updatedAsset);
-      toast({ title: "Configuration Saved", description: `Configuration for ${updatedAsset.name} has been updated.`});
-    } else {
-      toast({ title: "Error", description: "Failed to save configuration.", variant: "destructive"});
+  const handleSaveConfiguration = async (id: string, newConfiguration: Record<string, any>) => {
+    try {
+        const response = await fetch(`/api/assets/${id}/configuration`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(newConfiguration),
+        });
+        if (!response.ok) {
+            const errorData = await response.json();
+            throw new Error(errorData.error || `Failed to save configuration: ${response.statusText}`);
+        }
+        const updatedAsset: Asset = await response.json();
+        setAsset(updatedAsset); // Update local state
+        toast({ title: "Configuration Saved", description: `Configuration for ${updatedAsset.name} has been updated.`});
+    } catch (error) {
+        console.error("Error saving configuration:", error);
+        toast({ title: "Error", description: (error as Error).message, variant: "destructive"});
     }
     setIsEditConfigOpen(false);
   };
@@ -65,7 +115,7 @@ export default function AssetDetailsPage() {
     URL.revokeObjectURL(url);
   };
   
-  if (asset === undefined) {
+  if (isLoading || asset === undefined) { // Check for isLoading or initial undefined state
     return (
       <AppLayout>
         <div className="container mx-auto py-10 text-center">
@@ -96,7 +146,6 @@ export default function AssetDetailsPage() {
   }
 
   const instructionSteps = getMockInstructions(asset.type);
-  const folder = asset.folderId ? mockFoldersData.find(f => f.id === asset.folderId) : null;
 
   return (
     <AppLayout>
@@ -150,7 +199,7 @@ export default function AssetDetailsPage() {
                         <CardTitle className="font-headline text-xl">Setup & Configuration</CardTitle>
                         <CardDescription>Instructions to connect this asset and its current Prometheus configuration.</CardDescription>
                     </CardHeader>
-                    <CardContent className="space-y-6">
+                     <CardContent className="space-y-6">
                         <div>
                             <div className="flex items-center gap-2 mb-3">
                                 <FileText className="h-5 w-5 text-primary"/>
@@ -158,7 +207,7 @@ export default function AssetDetailsPage() {
                             </div>
                             {instructionSteps.length > 0 ? (
                                 <ScrollArea className="h-72 w-full rounded-md p-1">
-                                    <div className="text-sm">
+                                    <div className="text-sm space-y-6">
                                         {instructionSteps.map((stepHtml, index) => (
                                         <React.Fragment key={index}>
                                             <div dangerouslySetInnerHTML={{ __html: stepHtml }} />

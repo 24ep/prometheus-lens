@@ -1,7 +1,7 @@
 
 "use client";
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
@@ -10,12 +10,11 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { assetTypes, type AssetType, type Asset, type FormData as WizardFormData } from '@/types';
-import { mockFoldersData, addAsset } from '@/lib/mock-data';
 import { getMockPrometheusConfig, getMockInstructions, assetTypeConfigPlaceholders } from '@/lib/asset-utils';
 import { ArrowLeft, ArrowRight, Check, Sparkles, TestTubeDiagonal, Download } from 'lucide-react';
 import { ScrollArea } from '../ui/scroll-area';
 import { Separator } from '../ui/separator';
-
+import type { AssetFolder } from '@/types'; // Import AssetFolder
 
 const formSchema = z.object({
   name: z.string().min(3, { message: "Asset name must be at least 3 characters." }),
@@ -37,11 +36,12 @@ const STEPS = [
 ];
 
 interface AssetConnectionWizardProps {
-  onSaveComplete: (savedAsset: Asset) => void;
+  onSaveComplete: (assetData: Omit<Asset, 'id' | 'lastChecked' | 'status'>) => void; // Changed to pass data instead of saved asset
 }
 
 export function AssetConnectionWizard({ onSaveComplete }: AssetConnectionWizardProps) {
   const [currentStep, setCurrentStep] = useState(1);
+  const [mockFoldersData, setMockFoldersData] = useState<AssetFolder[]>([]); // State for folders
 
   const form = useForm<CurrentFormData>({
     resolver: zodResolver(formSchema),
@@ -49,6 +49,27 @@ export function AssetConnectionWizard({ onSaveComplete }: AssetConnectionWizardP
       type: assetTypes[0],
     },
   });
+
+  useEffect(() => {
+    // Fetch folders when the component mounts or wizard opens for step 1
+    const fetchFolders = async () => {
+      try {
+        const response = await fetch('/api/folders');
+        if (!response.ok) {
+          throw new Error('Failed to fetch folders');
+        }
+        const data: AssetFolder[] = await response.json();
+        setMockFoldersData(data);
+      } catch (error) {
+        console.error("Error fetching folders for wizard:", error);
+        // Handle error, e.g., show a toast or disable folder selection
+      }
+    };
+    if (currentStep === 1) {
+        fetchFolders();
+    }
+  }, [currentStep]);
+
 
   const watchedType = form.watch('type');
   const watchedName = form.watch('name');
@@ -65,9 +86,7 @@ export function AssetConnectionWizard({ onSaveComplete }: AssetConnectionWizardP
     if (configString.startsWith('# Incomplete configuration')) {
         return { job_name: 'incomplete_config', error: 'Configuration parameters missing or invalid.' };
     }
-    // Basic parsing attempt - in a real app, use a YAML parser library
     try {
-        // This is a mock parsing, not robust for all YAML structures from getMockPrometheusConfig
         const jobNameMatch = configString.match(/job_name:\s*'([^']+)'/);
         let parsedConfig: Record<string, any> = { job_name: jobNameMatch ? jobNameMatch[1] : watchedName?.toLowerCase().replace(/\s+/g, '_') || 'new_job' };
 
@@ -86,7 +105,6 @@ export function AssetConnectionWizard({ onSaveComplete }: AssetConnectionWizardP
                 const targets = targetsMatch[1].split(',').map(t => t.trim().replace(/'/g, ''));
                 parsedConfig.static_configs = [{ targets }];
             } else if (watchedConfigParam1) {
-                 // Fallback if regex fails but param1 exists (e.g. app endpoint)
                 let target = watchedConfigParam1;
                 if (watchedType === "Server" || watchedType === "Ubuntu Server" || watchedType === "Windows Server" || watchedType === "Database") {
                    target = `${watchedConfigParam1}:${watchedConfigParam2 || assetTypeConfigPlaceholders[watchedType]?.param2.match(/\d+/)?.[0] || 'PORT'}`;
@@ -145,13 +163,12 @@ export function AssetConnectionWizard({ onSaveComplete }: AssetConnectionWizardP
     const newAssetData: Omit<Asset, 'id' | 'lastChecked' | 'status'> = {
       name: data.name,
       type: data.type,
-      configuration: generatedConfigObject, // Use the parsed object
+      configuration: generatedConfigObject, 
       tags: data.tags ? data.tags.split(',').map(t => t.trim()).filter(t => t) : [],
       folderId: data.folderId === NO_FOLDER_VALUE ? undefined : data.folderId,
     };
     
-    const savedAsset = addAsset(newAssetData);
-    onSaveComplete(savedAsset);
+    onSaveComplete(newAssetData); // Pass data up to parent to handle API call
   };
 
   const handleTestConnection = () => {
@@ -165,9 +182,6 @@ export function AssetConnectionWizard({ onSaveComplete }: AssetConnectionWizardP
     }
 
     const filename = `${watchedName?.toLowerCase().replace(/\s+/g, '_') || 'prometheus_config'}.yaml`;
-    const yamlContent = `scrape_configs:\n  - ${JSON.stringify(generatedConfigObject, null, 2).replace(/^\{\n/, '').replace(/\n\}$/, '')}`;
-    
-    // We want the string display which is more complete for the user's prometheus.yml
     const blob = new Blob([generatedConfigStringForDisplay], { type: 'application/x-yaml' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -195,7 +209,7 @@ export function AssetConnectionWizard({ onSaveComplete }: AssetConnectionWizardP
         </div>
       </div>
       <form onSubmit={form.handleSubmit(onSubmit)}>
-        <div className="space-y-6 min-h-[300px] p-6 max-h-[calc(80vh-200px)] overflow-y-auto"> {/* Adjusted max-h */}
+        <div className="space-y-6 min-h-[300px] p-6 max-h-[calc(80vh-200px)] overflow-y-auto">
           {currentStep === 1 && (
             <>
               <div>
@@ -285,7 +299,7 @@ export function AssetConnectionWizard({ onSaveComplete }: AssetConnectionWizardP
                   <Label className="font-semibold block mb-1.5">Connection Instructions for {watchedType}</Label>
                   <ScrollArea className="h-56 w-full rounded-md border p-3 bg-muted/20">
                     {instructionSteps.length > 0 ? (
-                       <div className="text-sm">
+                       <div className="text-sm space-y-6">
                         {instructionSteps.map((stepHtml, index) => (
                            <React.Fragment key={index}>
                                 <div dangerouslySetInnerHTML={{ __html: stepHtml }} />

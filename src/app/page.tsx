@@ -4,7 +4,6 @@
 import { AppLayout } from '@/components/layout/app-layout';
 import { AssetListItem } from '@/components/common/asset-list-item';
 import { AssetTable } from '@/components/common/asset-table';
-import { mockAssetsData, mockFoldersData, addFolder, updateFolder as updateMockFolder, deleteFolder, updateAssetDetails, addAsset } from '@/lib/mock-data';
 import type { Asset, AssetFolder, AssetType } from '@/types';
 import { Button } from '@/components/ui/button';
 import { PlusCircle, Filter, Edit2, Trash2, Folder as FolderIcon, ChevronDown, ChevronRight, LayoutGrid, List, FileDown, FileUp } from 'lucide-react';
@@ -151,6 +150,7 @@ export default function AllAssetsPage() {
 
   const [assets, setAssets] = useState<Asset[]>([]);
   const [folders, setFolders] = useState<AssetFolder[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
 
   const [isAssetDetailsDialogOpen, setIsAssetDetailsDialogOpen] = useState(false);
   const [selectedAssetForDetails, setSelectedAssetForDetails] = useState<Asset | null>(null);
@@ -165,10 +165,31 @@ export default function AllAssetsPage() {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
 
-  const refreshData = useCallback(() => {
-    setAssets([...mockAssetsData]);
-    setFolders([...mockFoldersData].sort((a, b) => a.name.localeCompare(b.name)));
-  }, []);
+  const refreshData = useCallback(async () => {
+    setIsLoading(true);
+    try {
+      const [assetsRes, foldersRes] = await Promise.all([
+        fetch('/api/assets'),
+        fetch('/api/folders')
+      ]);
+
+      if (!assetsRes.ok) throw new Error(`Failed to fetch assets: ${assetsRes.statusText}`);
+      const assetsData: Asset[] = await assetsRes.json();
+      setAssets(assetsData);
+
+      if (!foldersRes.ok) throw new Error(`Failed to fetch folders: ${foldersRes.statusText}`);
+      const foldersData: AssetFolder[] = await foldersRes.json();
+      setFolders(foldersData.sort((a, b) => a.name.localeCompare(b.name)));
+
+    } catch (error) {
+      console.error("Error refreshing data:", error);
+      toast({ title: "Error Fetching Data", description: (error as Error).message, variant: "destructive" });
+      setAssets([]);
+      setFolders([]);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [toast]);
 
   useEffect(() => {
     refreshData();
@@ -224,20 +245,37 @@ export default function AllAssetsPage() {
     setIsAssetDetailsDialogOpen(true);
   };
 
-  const handleSaveAssetDetails = (assetId: string, details: { tags: string[], grafanaLink?: string }) => {
-    updateAssetDetails(assetId, details);
-    refreshData();
-    if (selectedAssetForDetails && selectedAssetForDetails.id === assetId) {
-       const updatedAssetFromMock = mockAssetsData.find(a => a.id === assetId);
-       if (updatedAssetFromMock) setSelectedAssetForDetails(updatedAssetFromMock);
+  const handleSaveAssetDetails = async (assetId: string, details: { tags: string[], grafanaLink?: string }) => {
+    try {
+      const response = await fetch(`/api/assets/${assetId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(details),
+      });
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || `Failed to save asset details: ${response.statusText}`);
+      }
+      const updatedAsset: Asset = await response.json();
+      setAssets(prevAssets => prevAssets.map(a => a.id === assetId ? updatedAsset : a));
+      if (selectedAssetForDetails && selectedAssetForDetails.id === assetId) {
+         setSelectedAssetForDetails(updatedAsset);
+      }
+      toast({ title: "Asset Details Saved", description: `Details for ${updatedAsset.name} updated.`});
+    } catch (error) {
+      console.error("Error saving asset details:", error);
+      toast({ title: "Error", description: (error as Error).message, variant: "destructive" });
     }
   };
 
-  const handleAssetConfigurationSave = (updatedAssetFromDialog: Asset) => {
-    refreshData();
+  const handleAssetConfigurationSave = async (updatedAssetFromDialog: Asset) => {
+     // This function is called from AssetDetailsDialog which itself calls the API.
+     // We just need to refresh the local state for the main page.
+    setAssets(prevAssets => prevAssets.map(a => a.id === updatedAssetFromDialog.id ? updatedAssetFromDialog : a));
     if (selectedAssetForDetails && selectedAssetForDetails.id === updatedAssetFromDialog.id) {
        setSelectedAssetForDetails(updatedAssetFromDialog);
     }
+     // Toast is handled by the dialog itself
   };
 
   const handleCreateItemTypeSelection = (type: 'asset' | 'folder') => {
@@ -250,26 +288,57 @@ export default function AllAssetsPage() {
     }
   };
 
-  const handleAssetWizardSave = (savedAsset: Asset) => {
-    refreshData();
-    setIsAssetWizardOpen(false);
-    toast({
-      title: "Asset Added!",
-      description: `Asset "${savedAsset.name}" of type "${savedAsset.type}" has been configured.`,
-    });
+  const handleAssetWizardSave = async (assetData: Omit<Asset, 'id' | 'lastChecked' | 'status'>) => {
+    try {
+      const response = await fetch('/api/assets', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(assetData),
+      });
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || `Failed to add asset: ${response.statusText}`);
+      }
+      const savedAsset: Asset = await response.json();
+      setAssets(prevAssets => [savedAsset, ...prevAssets]); // Add to local state
+      setIsAssetWizardOpen(false);
+      toast({
+        title: "Asset Added!",
+        description: `Asset "${savedAsset.name}" of type "${savedAsset.type}" has been configured.`,
+      });
+    } catch (error) {
+      console.error("Error adding asset:", error);
+      toast({ title: "Error Adding Asset", description: (error as Error).message, variant: "destructive" });
+    }
   };
 
-  const handleSaveFolder = (folderData: { id?: string; name: string; parentId?: string }) => {
-    if (folderData.id) {
-      const updated = updateMockFolder(folderData.id, folderData.name, folderData.parentId);
-      if (updated) {
-        toast({ title: "Folder Updated", description: `Folder "${updated.name}" saved.`});
+  const handleSaveFolder = async (folderData: { id?: string; name: string; parentId?: string }) => {
+    const url = folderData.id ? `/api/folders/${folderData.id}` : '/api/folders';
+    const method = folderData.id ? 'PUT' : 'POST';
+    try {
+      const response = await fetch(url, {
+        method: method,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: folderData.name, parentId: folderData.parentId }),
+      });
+
+      if (!response.ok) {
+        const errorResult = await response.json();
+        throw new Error(errorResult.error || `Failed to save folder: ${response.statusText}`);
       }
-    } else {
-      const newF = addFolder(folderData.name, folderData.parentId);
-      toast({ title: "Folder Created", description: `Folder "${newF.name}" added.`});
+      const savedFolder: AssetFolder = await response.json();
+      
+      if (folderData.id) {
+        setFolders(prev => prev.map(f => f.id === savedFolder.id ? savedFolder : f).sort((a,b) => a.name.localeCompare(b.name)));
+        toast({ title: "Folder Updated", description: `Folder "${savedFolder.name}" saved.`});
+      } else {
+        setFolders(prev => [...prev, savedFolder].sort((a,b) => a.name.localeCompare(b.name)));
+        toast({ title: "Folder Created", description: `Folder "${savedFolder.name}" added.`});
+      }
+    } catch (error) {
+      console.error("Error saving folder:", error);
+      toast({ title: "Error", description: (error as Error).message, variant: "destructive" });
     }
-    refreshData();
     setIsManageFolderDialogOpen(false);
     setFolderToEdit(null);
   };
@@ -284,18 +353,24 @@ export default function AllAssetsPage() {
     setIsConfirmDeleteFolderDialogOpen(true);
   };
 
-  const confirmDeleteFolder = () => {
+  const confirmDeleteFolder = async () => {
     if (folderToDelete) {
-      const success = deleteFolder(folderToDelete.id);
-      if (success) {
+      try {
+        const response = await fetch(`/api/folders/${folderToDelete.id}`, { method: 'DELETE' });
+        if (!response.ok) {
+          const errorResult = await response.json();
+          throw new Error(errorResult.error || "Could not delete folder.");
+        }
         toast({ title: "Folder Deleted", description: `Folder "${folderToDelete.name}" removed.`});
         if (selectedFolderFilter === folderToDelete.id) {
           setSelectedFolderFilter('all');
         }
-      } else {
-        toast({ title: "Error", description: "Could not delete folder. It might not exist.", variant: "destructive"});
+        // Assets potentially unassigned will be reflected in next asset fetch or asset count calculation
+        await refreshData(); // Re-fetch all data to reflect changes comprehensively
+      } catch (error) {
+         console.error("Error deleting folder:", error);
+         toast({ title: "Error", description: (error as Error).message, variant: "destructive"});
       }
-      refreshData();
     }
     setIsConfirmDeleteFolderDialogOpen(false);
     setFolderToDelete(null);
@@ -346,12 +421,12 @@ export default function AllAssetsPage() {
     toast({ title: "Template Downloaded", description: "Asset import template is ready." });
   };
 
-  const handleImportFromExcel = (event: React.ChangeEvent<HTMLInputElement>) => {
+  const handleImportFromExcel = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
 
     const reader = new FileReader();
-    reader.onload = (e) => {
+    reader.onload = async (e) => {
       try {
         const data = e.target?.result;
         const workbook = XLSX.read(data, { type: 'binary' });
@@ -362,22 +437,24 @@ export default function AllAssetsPage() {
         let importedCount = 0;
         let errorCount = 0;
 
-        jsonData.forEach((row, index) => {
+        for (const row of jsonData) { // Use for...of for async operations within loop
           const { Name, Type, FolderName, Tags, ConfigParam1, ConfigParam2, GrafanaLink } = row;
 
           if (!Name || !Type) {
-            toast({ title: `Import Error (Row ${index + 2})`, description: "Name and Type are required.", variant: "destructive" });
+            toast({ title: `Import Error (Row ${jsonData.indexOf(row) + 2})`, description: "Name and Type are required.", variant: "destructive" });
             errorCount++;
-            return;
+            continue;
           }
           
           let folderId: string | undefined = undefined;
           if (FolderName) {
-            const foundFolder = folders.find(f => f.name.toLowerCase() === String(FolderName).toLowerCase());
+            // Ensure folders are up-to-date before finding
+            const currentFolders = folders.length > 0 ? folders : await (await fetch('/api/folders')).json();
+            const foundFolder = currentFolders.find(f => f.name.toLowerCase() === String(FolderName).toLowerCase());
             if (foundFolder) {
               folderId = foundFolder.id;
             } else {
-               toast({ title: `Import Warning (Row ${index + 2})`, description: `Folder "${FolderName}" not found. Asset will be uncategorized.`, variant: "default" });
+               toast({ title: `Import Warning (Row ${jsonData.indexOf(row) + 2})`, description: `Folder "${FolderName}" not found. Asset will be uncategorized.`, variant: "default" });
             }
           }
           
@@ -389,9 +466,8 @@ export default function AllAssetsPage() {
           });
 
           let finalConfig = {};
-          if (!configObject.startsWith('# Incomplete configuration')) {
+           if (!configObject.startsWith('# Incomplete configuration')) {
             try {
-                // This is a mock parsing, not robust for all YAML structures from getMockPrometheusConfig
                 const jobNameMatch = configObject.match(/job_name:\s*'([^']+)'/);
                 finalConfig = { job_name: jobNameMatch ? jobNameMatch[1] : String(Name).toLowerCase().replace(/\s+/g, '_') || 'new_job' };
 
@@ -422,19 +498,33 @@ export default function AllAssetsPage() {
 
           const newAssetData: Omit<Asset, 'id' | 'lastChecked' | 'status'> = {
             name: String(Name),
-            type: Type as AssetType, // Basic type validation should be added
+            type: Type as AssetType, 
             configuration: finalConfig,
             tags: Tags ? String(Tags).split(',').map(t => t.trim()).filter(t => t) : [],
             folderId: folderId,
             grafanaLink: GrafanaLink ? String(GrafanaLink) : undefined,
           };
-          addAsset(newAssetData);
-          importedCount++;
-        });
+          
+          try {
+            const response = await fetch('/api/assets', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(newAssetData),
+            });
+            if (!response.ok) {
+              const errorData = await response.json();
+              throw new Error(errorData.error || `Failed to import asset ${Name}`);
+            }
+            importedCount++;
+          } catch (apiError) {
+            toast({ title: `Import Error (Asset: ${Name})`, description: (apiError as Error).message, variant: "destructive" });
+            errorCount++;
+          }
+        }
 
-        refreshData();
+        await refreshData(); // Refresh all data after import attempts
         if (importedCount > 0) {
-            toast({ title: "Import Successful", description: `${importedCount} assets imported. ${errorCount > 0 ? errorCount + ' rows had errors.' : ''}` });
+            toast({ title: "Import Processed", description: `${importedCount} assets imported. ${errorCount > 0 ? errorCount + ' rows had errors.' : ''}` });
         } else if (errorCount > 0) {
             toast({ title: "Import Failed", description: `No assets imported. ${errorCount} rows had errors.`, variant: "destructive" });
         } else {
@@ -446,12 +536,22 @@ export default function AllAssetsPage() {
         toast({ title: "Import Error", description: "Failed to process the Excel file.", variant: "destructive" });
       } finally {
         if (fileInputRef.current) {
-            fileInputRef.current.value = ""; // Reset file input
+            fileInputRef.current.value = ""; 
         }
       }
     };
     reader.readAsBinaryString(file);
   };
+
+  if (isLoading) {
+    return (
+      <AppLayout>
+        <div className="flex items-center justify-center h-[calc(100vh-var(--header-height,4rem)-2rem)]">
+          <p>Loading data...</p> {/* Replace with a proper spinner/skeleton later */}
+        </div>
+      </AppLayout>
+    );
+  }
 
   return (
     <AppLayout>
