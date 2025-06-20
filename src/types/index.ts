@@ -1,7 +1,7 @@
 
-export type AssetType = "Server" | "Network" | "Application" | "Database" | "Kubernetes";
+export type AssetType = "Server" | "Network" | "Application" | "Database" | "Kubernetes" | "Docker" | "Ubuntu Server" | "Windows Server";
 
-export const assetTypes: AssetType[] = ["Server", "Network", "Application", "Database", "Kubernetes"];
+export const assetTypes: AssetType[] = ["Server", "Network", "Application", "Database", "Kubernetes", "Docker", "Ubuntu Server", "Windows Server"];
 
 export interface Asset {
   id: string;

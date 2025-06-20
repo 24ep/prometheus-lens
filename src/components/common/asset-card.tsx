@@ -1,10 +1,11 @@
+
 "use client";
 
 import type { Asset } from '@/types';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Server, Network, AppWindow, Database, Box, ExternalLink, Zap, XCircle, AlertTriangle, CheckCircle2, Hourglass, Info } from 'lucide-react';
+import { Server, Network, AppWindow, Database, Box, ExternalLink, Zap, XCircle, AlertTriangle, CheckCircle2, Hourglass, Info, Container } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { formatDistanceToNow } from 'date-fns';
 
@@ -19,6 +20,9 @@ const assetIcons: Record<Asset['type'], React.ElementType> = {
   Application: AppWindow,
   Database: Database,
   Kubernetes: Box,
+  Docker: Container,
+  "Ubuntu Server": Server,
+  "Windows Server": Server,
 };
 
 const statusColors: Record<Asset['status'], string> = {
@@ -36,7 +40,7 @@ const statusIcons: Record<Asset['status'], React.ElementType> = {
 };
 
 export function AssetCard({ asset, onDetailsClick }: AssetCardProps) {
-  const Icon = assetIcons[asset.type];
+  const Icon = assetIcons[asset.type] || Server; // Fallback to Server icon if type is new and unmapped
   const StatusIcon = statusIcons[asset.status];
 
   return (

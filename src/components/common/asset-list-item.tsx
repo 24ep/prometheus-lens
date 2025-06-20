@@ -5,7 +5,7 @@ import type { Asset } from '@/types';
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Server, Network, AppWindow, Database, Box, ExternalLink, Info, CheckCircle2, XCircle, AlertTriangle, Hourglass } from 'lucide-react';
+import { Server, Network, AppWindow, Database, Box, ExternalLink, Info, CheckCircle2, XCircle, AlertTriangle, Hourglass, Container } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { formatDistanceToNow } from 'date-fns';
 
@@ -20,6 +20,9 @@ const assetIcons: Record<Asset['type'], React.ElementType> = {
   Application: AppWindow,
   Database: Database,
   Kubernetes: Box,
+  Docker: Container,
+  "Ubuntu Server": Server,
+  "Windows Server": Server,
 };
 
 const statusTextColors: Record<Asset['status'], string> = {
@@ -37,7 +40,7 @@ const statusIcons: Record<Asset['status'], React.ElementType> = {
 };
 
 export function AssetListItem({ asset, onDetailsClick }: AssetListItemProps) {
-  const AssetIcon = assetIcons[asset.type];
+  const AssetIcon = assetIcons[asset.type] || Server; // Fallback for safety
   const StatusIcon = statusIcons[asset.status];
 
   return (
