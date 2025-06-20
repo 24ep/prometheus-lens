@@ -57,7 +57,7 @@ export default function DashboardPage() {
           <h1 className="text-3xl font-headline font-bold text-foreground">Asset Dashboard</h1>
           <p className="text-muted-foreground">Overview of your monitored assets.</p>
         </div>
-        <Link href="/assets/new" passHref>
+        <Link href="/assets/new">
           <Button>
             <PlusCircle className="mr-2 h-5 w-5" />
             Add New Asset

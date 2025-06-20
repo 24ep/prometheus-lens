@@ -2,7 +2,7 @@
 
 import { AppLayout } from '@/components/layout/app-layout';
 import { useParams } from 'next/navigation';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
 import { mockAssetsData } from '@/lib/mock-data';
 import { Button } from '@/components/ui/button';
 import Link from 'next/link';
@@ -27,7 +27,7 @@ export default function AssetDetailsPage() {
             </CardHeader>
             <CardContent>
               <p className="text-muted-foreground mb-4">The asset you are looking for does not exist or could not be loaded.</p>
-              <Link href="/" passHref>
+              <Link href="/">
                 <Button variant="outline"><ArrowLeft className="mr-2 h-4 w-4" /> Back to Dashboard</Button>
               </Link>
             </CardContent>
@@ -41,7 +41,7 @@ export default function AssetDetailsPage() {
     <AppLayout>
       <div className="container mx-auto py-4">
          <div className="mb-6">
-           <Link href="/" passHref>
+           <Link href="/">
              <Button variant="outline" size="sm" className="mb-4">
                <ArrowLeft className="mr-2 h-4 w-4" /> Back to Dashboard
              </Button>

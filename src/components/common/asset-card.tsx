@@ -73,7 +73,7 @@ export function AssetCard({ asset }: AssetCardProps) {
       </CardContent>
       <CardFooter className="pt-0 border-t border-[hsl(var(--glass-border-light))] bg-white/10 dark:bg-black/10">
         <div className="flex w-full justify-between items-center mt-4">
-          <Link href={`/assets/${asset.id}`} passHref legacyBehavior>
+          <Link href={`/assets/${asset.id}`}>
             <Button variant="outline" size="sm">
               <Zap className="mr-2 h-4 w-4" />
               Details

@@ -65,7 +65,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                 <SidebarSeparator key={`sep-${index}`} className="my-2" />
               ) : (
                 <SidebarMenuItem key={item.href}>
-                  <Link href={item.href} passHref legacyBehavior>
+                  <Link href={item.href}>
                     <SidebarMenuButton
                       isActive={pathname === item.href}
                       disabled={item.disabled}
