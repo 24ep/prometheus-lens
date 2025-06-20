@@ -35,9 +35,9 @@ const formSchema = z.object({
   }),
   folderId: z.string().optional(),
   tags: z.string().optional(), // Comma-separated
-  config_param1: z.string().optional(), 
-  config_param2: z.string().optional(), 
-  prometheus_config: z.string().optional(), 
+  config_param1: z.string().optional(),
+  config_param2: z.string().optional(),
+  prometheus_config: z.string().optional(),
 });
 
 type FormData = z.infer<typeof formSchema>;
@@ -67,7 +67,7 @@ const getMockPrometheusConfig = (data: Partial<FormData>): string => {
 scrape_configs:
   - job_name: '${jobName}'
     kubernetes_sd_configs:
-      - role: pod 
+      - role: pod
         api_server: ${data.config_param1 || 'YOUR_K8S_API_SERVER'}
     relabel_configs:
       - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_scrape]
@@ -147,7 +147,8 @@ export function AssetConnectionWizard() {
   const form = useForm<FormData>({
     resolver: zodResolver(formSchema),
     defaultValues: {
-      type: assetTypes[0], 
+      type: assetTypes[0],
+      // folderId will default to undefined
     },
   });
 
@@ -155,19 +156,19 @@ export function AssetConnectionWizard() {
   const watchedName = form.watch('name');
   const watchedConfigParam1 = form.watch('config_param1');
   const watchedConfigParam2 = form.watch('config_param2');
-  
+
   const generatedConfig = getMockPrometheusConfig({
     type: watchedType,
     name: watchedName,
     config_param1: watchedConfigParam1,
     config_param2: watchedConfigParam2,
   });
-  
+
   const instructionSteps = getMockInstructions(watchedType);
 
   const handleNext = async () => {
     const isValid = await form.trigger(
-      currentStep === 1 ? ['name', 'type'] : 
+      currentStep === 1 ? ['name', 'type', 'folderId'] :
       currentStep === 2 ? ['config_param1', 'config_param2'] : []
     );
     if (isValid && currentStep < STEPS.length) {
@@ -184,18 +185,18 @@ export function AssetConnectionWizard() {
   };
 
   const onSubmit = (data: FormData) => {
-    console.log(data); 
+    console.log(data);
     toast({
       title: "Asset Configuration Saved!",
       description: `Asset "${data.name}" of type "${data.type}" has been configured.`,
       variant: 'default',
     });
   };
-  
+
   const handleTestConnection = () => {
     toast({ title: "Testing Connection...", description: "This is a mock test." });
     setTimeout(() => {
-      const success = Math.random() > 0.3; 
+      const success = Math.random() > 0.3;
       toast({
         title: success ? "Connection Successful!" : "Connection Failed",
         description: success ? "Prometheus can reach the configured target." : "Could not connect. Check configuration and network.",
@@ -203,8 +204,9 @@ export function AssetConnectionWizard() {
       });
     }, 1500);
   };
-  
+
   const configPlaceholders = watchedType ? assetTypeConfigPlaceholders[watchedType] : { param1: '', param2: '' };
+  const NO_FOLDER_VALUE = "___NO_FOLDER___";
 
   return (
     <Card className="w-full max-w-2xl mx-auto glassmorphic">
@@ -233,7 +235,7 @@ export function AssetConnectionWizard() {
                   name="type"
                   control={form.control}
                   render={({ field }) => (
-                    <Select onValueChange={field.onChange} defaultValue={field.value}>
+                    <Select onValueChange={field.onChange} value={field.value}>
                       <SelectTrigger id="type">
                         <SelectValue placeholder="Select asset type" />
                       </SelectTrigger>
@@ -253,12 +255,17 @@ export function AssetConnectionWizard() {
                   name="folderId"
                   control={form.control}
                   render={({ field }) => (
-                    <Select onValueChange={field.onChange} defaultValue={field.value}>
+                    <Select
+                      onValueChange={(value) => {
+                        field.onChange(value === NO_FOLDER_VALUE ? undefined : value);
+                      }}
+                      value={field.value === undefined ? "" : field.value} // Pass "" to show placeholder if undefined
+                    >
                       <SelectTrigger id="folderId">
                         <SelectValue placeholder="Assign to a folder" />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="">None</SelectItem>
+                        <SelectItem value={NO_FOLDER_VALUE}>None</SelectItem>
                         {mockFoldersData.map(folder => (
                           <SelectItem key={folder.id} value={folder.id}>{folder.name}</SelectItem>
                         ))}
@@ -323,7 +330,7 @@ export function AssetConnectionWizard() {
                   </DialogFooter>
                 </DialogContent>
               </Dialog>
-              
+
               <div>
                 <Label>Generated Prometheus Configuration</Label>
                  <ScrollArea className="h-40 w-full rounded-md border p-2 bg-muted/30">
@@ -355,3 +362,4 @@ export function AssetConnectionWizard() {
     </Card>
   );
 }
+
