@@ -9,12 +9,13 @@ import { mockAssetsData, mockFoldersData, updateAssetConfiguration as updateMock
 import type { Asset } from '@/types';
 import { Button } from '@/components/ui/button';
 import Link from 'next/link';
-import { ArrowLeft, Edit, ExternalLink, TestTubeDiagonal, Download } from 'lucide-react';
+import { ArrowLeft, Edit, ExternalLink, TestTubeDiagonal, Download, Settings2, FileText } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { getMockInstructions } from '@/lib/asset-utils';
 import { EditAssetConfigurationDialog } from '@/components/assets/edit-asset-configuration-dialog';
 import { useToast } from '@/hooks/use-toast';
+import { Separator } from '@/components/ui/separator';
 
 export default function AssetDetailsPage() {
   const params = useParams();
@@ -143,22 +144,56 @@ export default function AssetDetailsPage() {
                         <p className="mt-2">Last Checked: {new Date(asset.lastChecked).toLocaleString()}</p>
                     </CardContent>
                 </Card>
-                 <Card>
-                    <CardHeader className="flex flex-row justify-between items-center">
-                        <CardTitle className="font-headline text-xl">Prometheus Configuration</CardTitle>
-                        <Button variant="outline" size="sm" onClick={handleDownloadYaml} disabled={!asset.configuration}>
-                          <Download className="mr-2 h-4 w-4" />
-                          Download YAML
-                        </Button>
+                
+                <Card>
+                    <CardHeader>
+                        <CardTitle className="font-headline text-xl">Setup & Configuration</CardTitle>
+                        <CardDescription>Instructions to connect this asset and its current Prometheus configuration.</CardDescription>
                     </CardHeader>
-                    <CardContent>
-                        <ScrollArea className="h-48 w-full rounded-md border p-3 bg-muted/30">
-                            <pre className="text-sm font-code whitespace-pre-wrap">
-                                {JSON.stringify({ scrape_configs: [asset.configuration] }, null, 2)}
-                            </pre>
-                        </ScrollArea>
+                    <CardContent className="space-y-6">
+                        <div>
+                            <div className="flex items-center gap-2 mb-3">
+                                <FileText className="h-5 w-5 text-primary"/>
+                                <h3 className="font-headline text-lg">Connection Instructions</h3>
+                            </div>
+                            {instructionSteps.length > 0 ? (
+                                <ScrollArea className="h-72 w-full rounded-md p-1">
+                                    <ol className="list-decimal list-inside space-y-4 text-sm text-muted-foreground">
+                                        {instructionSteps.map((step, index) => (
+                                        <li key={index} className="p-4 border rounded-lg bg-card shadow-sm" dangerouslySetInnerHTML={{ __html: step }}></li>
+                                        ))}
+                                    </ol>
+                                </ScrollArea>
+                            ) : (
+                                <p className="text-sm text-muted-foreground">No specific instructions available for this asset type.</p>
+                            )}
+                        </div>
+
+                        <Separator />
+
+                        <div>
+                            <div className="flex flex-row justify-between items-center mb-3">
+                                <div className="flex items-center gap-2">
+                                    <Settings2 className="h-5 w-5 text-primary"/>
+                                    <h3 className="font-headline text-lg">Prometheus Configuration</h3>
+                                </div>
+                                <Button variant="outline" size="sm" onClick={handleDownloadYaml} disabled={!asset.configuration}>
+                                  <Download className="mr-2 h-4 w-4" />
+                                  Download YAML
+                                </Button>
+                            </div>
+                            <ScrollArea className="h-48 w-full rounded-md border p-3 bg-muted/30">
+                                <pre className="text-sm font-code whitespace-pre-wrap">
+                                    {JSON.stringify({ scrape_configs: [asset.configuration] }, null, 2)}
+                                </pre>
+                            </ScrollArea>
+                             <Button variant="outline" size="sm" onClick={() => setIsEditConfigOpen(true)} className="mt-3">
+                                <Edit className="mr-2 h-4 w-4"/>Edit Configuration
+                            </Button>
+                        </div>
                     </CardContent>
                 </Card>
+
             </div>
             <div className="space-y-6">
                 <Card>
@@ -179,24 +214,6 @@ export default function AssetDetailsPage() {
                             ) : (<span className="text-muted-foreground"> No tags</span>)
                             }
                         </div>
-                    </CardContent>
-                </Card>
-                <Card>
-                    <CardHeader>
-                        <CardTitle className="font-headline text-xl">Instructions</CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                        {instructionSteps.length > 0 ? (
-                            <ScrollArea className="h-60 w-full rounded-md p-1">
-                                <ol className="list-decimal list-inside space-y-4 text-sm text-muted-foreground">
-                                    {instructionSteps.map((step, index) => (
-                                    <li key={index} className="p-4 border rounded-lg bg-card shadow-sm" dangerouslySetInnerHTML={{ __html: step }}></li>
-                                    ))}
-                                </ol>
-                            </ScrollArea>
-                        ) : (
-                            <p className="text-sm text-muted-foreground">No specific instructions available for this asset type.</p>
-                        )}
                     </CardContent>
                 </Card>
             </div>

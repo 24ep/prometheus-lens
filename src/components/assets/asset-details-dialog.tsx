@@ -10,12 +10,13 @@ import { Label } from '@/components/ui/label';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter, DialogClose } from '@/components/ui/dialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { ExternalLink, X, PlusCircle, Edit, Settings2, Info, Tag, ListChecks, FileText, Download, LinkIcon } from 'lucide-react';
+import { ExternalLink, X, PlusCircle, Edit, Settings2, Info, Tag, ListChecks, FileText, Download, LinkIcon, BookOpen } from 'lucide-react';
 import React, { useState, useEffect } from 'react';
 import { useToast } from '@/hooks/use-toast';
 import { getMockInstructions } from '@/lib/asset-utils';
 import { EditAssetConfigurationDialog } from './edit-asset-configuration-dialog';
 import { cn } from '@/lib/utils';
+import { Separator } from '../ui/separator';
 
 interface AssetDetailsDialogProps {
   asset: Asset | null;
@@ -44,7 +45,7 @@ export function AssetDetailsDialog({ asset, allFolders, isOpen, onOpenChange, on
       setGrafanaLinkInput('');
       setCurrentAssetForEdit(null);
     }
-    setTagInput(''); // Always reset tag input on open/asset change
+    setTagInput(''); 
   }, [asset, isOpen]);
 
   if (!asset) return null;
@@ -68,8 +69,6 @@ export function AssetDetailsDialog({ asset, allFolders, isOpen, onOpenChange, on
   const handleSaveDetailsLocal = () => {
     onSaveDetails(asset.id, { tags: currentTags, grafanaLink: grafanaLinkInput.trim() });
     toast({ title: "Details Updated", description: `Details for ${asset.name} saved.` });
-    // Optionally close dialog or indicate save. For now, just toast.
-    // onOpenChange(false); // Could close dialog on save
   };
 
   const handleOpenEditConfig = () => {
@@ -81,7 +80,7 @@ export function AssetDetailsDialog({ asset, allFolders, isOpen, onOpenChange, on
     if (updatedAsset) {
       setCurrentAssetForEdit(updatedAsset); 
       onConfigurationSave(updatedAsset); 
-      setGrafanaLinkInput(updatedAsset.grafanaLink || ''); // Re-sync Grafana link if asset is updated
+      setGrafanaLinkInput(updatedAsset.grafanaLink || ''); 
       toast({ title: "Configuration Saved", description: `Configuration for ${updatedAsset.name} has been updated.` });
     } else {
       toast({ title: "Error", description: "Failed to save configuration.", variant: "destructive" });
@@ -137,17 +136,14 @@ export function AssetDetailsDialog({ asset, allFolders, isOpen, onOpenChange, on
               <TabsTrigger value="overview" className="justify-start px-3 py-2 text-sm data-[state=active]:bg-background data-[state=active]:shadow-sm">
                 <Info className="mr-2 h-4 w-4" /> Overview
               </TabsTrigger>
-              <TabsTrigger value="configuration" className="justify-start px-3 py-2 text-sm data-[state=active]:bg-background data-[state=active]:shadow-sm">
-                <Settings2 className="mr-2 h-4 w-4" /> Configuration
+              <TabsTrigger value="setup" className="justify-start px-3 py-2 text-sm data-[state=active]:bg-background data-[state=active]:shadow-sm">
+                <BookOpen className="mr-2 h-4 w-4" /> Setup Guide
               </TabsTrigger>
               <TabsTrigger value="metadata" className="justify-start px-3 py-2 text-sm data-[state=active]:bg-background data-[state=active]:shadow-sm">
                 <ListChecks className="mr-2 h-4 w-4" /> Details & Links
               </TabsTrigger>
               <TabsTrigger value="tags" className="justify-start px-3 py-2 text-sm data-[state=active]:bg-background data-[state=active]:shadow-sm">
                 <Tag className="mr-2 h-4 w-4" /> Tags
-              </TabsTrigger>
-              <TabsTrigger value="instructions" className="justify-start px-3 py-2 text-sm data-[state=active]:bg-background data-[state=active]:shadow-sm">
-                <FileText className="mr-2 h-4 w-4" /> Instructions
               </TabsTrigger>
             </TabsList>
 
@@ -165,10 +161,33 @@ export function AssetDetailsDialog({ asset, allFolders, isOpen, onOpenChange, on
                 </div>
               </TabsContent>
 
-              <TabsContent value="configuration" className="mt-0 space-y-4">
+              <TabsContent value="setup" className="mt-0 space-y-6">
                 <div className="p-4 rounded-lg border bg-card/50">
-                    <div className="flex justify-between items-center mb-2">
-                        <h3 className="font-headline text-lg">Prometheus Configuration</h3>
+                  <div className="flex items-center gap-2 mb-3">
+                    <FileText className="h-5 w-5 text-primary"/>
+                    <h3 className="font-headline text-lg">Connection Instructions</h3>
+                  </div>
+                  {instructionSteps.length > 0 ? (
+                    <ScrollArea className="h-64 w-full rounded-md p-1">
+                        <ol className="list-decimal list-inside space-y-4 text-sm text-muted-foreground">
+                        {instructionSteps.map((step, index) => (
+                            <li key={index} className="p-4 border rounded-lg bg-card shadow-sm" dangerouslySetInnerHTML={{ __html: step }}></li>
+                        ))}
+                        </ol>
+                    </ScrollArea>
+                  ) : (
+                    <p className="text-sm text-muted-foreground">No specific instructions available for this asset type.</p>
+                  )}
+                </div>
+                
+                <Separator />
+
+                <div className="p-4 rounded-lg border bg-card/50">
+                    <div className="flex flex-row justify-between items-center mb-3">
+                        <div className="flex items-center gap-2">
+                            <Settings2 className="h-5 w-5 text-primary"/>
+                            <h3 className="font-headline text-lg">Prometheus Configuration</h3>
+                        </div>
                         <div className="flex gap-2">
                             <Button variant="outline" size="sm" onClick={handleOpenEditConfig}>
                                 <Edit className="mr-2 h-4 w-4"/>Edit
@@ -242,22 +261,6 @@ export function AssetDetailsDialog({ asset, allFolders, isOpen, onOpenChange, on
                 </div>
               </TabsContent>
 
-              <TabsContent value="instructions" className="mt-0 space-y-4">
-                <div className="p-4 rounded-lg border bg-card/50">
-                  <h3 className="font-headline text-lg mb-2">Connection Instructions</h3>
-                  {instructionSteps.length > 0 ? (
-                    <ScrollArea className="h-64 w-full rounded-md p-1">
-                        <ol className="list-decimal list-inside space-y-4 text-sm text-muted-foreground">
-                        {instructionSteps.map((step, index) => (
-                            <li key={index} className="p-4 border rounded-lg bg-card shadow-sm" dangerouslySetInnerHTML={{ __html: step }}></li>
-                        ))}
-                        </ol>
-                    </ScrollArea>
-                  ) : (
-                    <p className="text-sm text-muted-foreground">No specific instructions available for this asset type.</p>
-                  )}
-                </div>
-              </TabsContent>
             </ScrollArea>
           </Tabs>
         
