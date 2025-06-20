@@ -12,10 +12,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { assetTypes, type AssetType, type Asset, type FormData as WizardFormData } from '@/types';
 import { mockFoldersData, addAsset } from '@/lib/mock-data';
 import { getMockPrometheusConfig, getMockInstructions, assetTypeConfigPlaceholders } from '@/lib/asset-utils';
-import { ArrowLeft, ArrowRight, Check, Sparkles, TestTubeDiagonal, Download } from 'lucide-react'; // FileText removed, Download added
+import { ArrowLeft, ArrowRight, Check, Sparkles, TestTubeDiagonal, Download } from 'lucide-react';
 import { ScrollArea } from '../ui/scroll-area';
-// Dialog related imports for nested dialog (if any were still used, but instructions dialog is removed) are no longer needed for instructions
-// import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger, DialogClose } from '@/components/ui/dialog';
 
 
 const formSchema = z.object({
@@ -34,7 +32,7 @@ type CurrentFormData = WizardFormData;
 const STEPS = [
   { id: 1, name: 'Basic Information' },
   { id: 2, name: 'Configuration Details' },
-  { id: 3, name: 'Review & Download' }, // Updated step name
+  { id: 3, name: 'Review & Download' },
 ];
 
 interface AssetConnectionWizardProps {
@@ -64,29 +62,47 @@ export function AssetConnectionWizard({ onSaveComplete }: AssetConnectionWizardP
         config_param2: watchedConfigParam2,
       });
     if (configString.startsWith('# Incomplete configuration')) {
-        return { job_name: 'incomplete_config' };
+        return { job_name: 'incomplete_config', error: 'Configuration parameters missing or invalid.' };
     }
-    const jobNameMatch = configString.match(/job_name:\s*'([^']+)'/);
-    const targetsMatch = configString.match(/targets:\s*\[([^\]]+)\]/);
-    const apiServerMatch = configString.match(/api_server:\s*([^\s]+)/);
+    // Basic parsing attempt - in a real app, use a YAML parser library
+    try {
+        // This is a mock parsing, not robust for all YAML structures from getMockPrometheusConfig
+        const jobNameMatch = configString.match(/job_name:\s*'([^']+)'/);
+        let parsedConfig: Record<string, any> = { job_name: jobNameMatch ? jobNameMatch[1] : watchedName?.toLowerCase().replace(/\s+/g, '_') || 'new_job' };
 
-    const baseConfig: Record<string, any> = {
-        job_name: jobNameMatch ? jobNameMatch[1] : watchedName?.toLowerCase().replace(/\s+/g, '_') || 'new_job'
-    };
+        if (configString.includes("kubernetes_sd_configs:")) {
+            const apiServerMatch = configString.match(/api_server:\s*'?([^'\s]+)'?/);
+            const roleMatch = configString.match(/role:\s*(\w+)/);
+            parsedConfig.kubernetes_sd_configs = [{ 
+                role: roleMatch ? roleMatch[1] : 'pod', 
+                api_server: apiServerMatch ? apiServerMatch[1] : watchedConfigParam1 || 'YOUR_K8S_API_SERVER_URL'
+            }];
+            if (watchedConfigParam2) parsedConfig.kubernetes_sd_configs[0].bearer_token_file = watchedConfigParam2;
 
-    if (watchedType === 'Kubernetes') {
-        baseConfig.kubernetes_sd_configs = [{ 
-            role: 'pod', 
-            api_server: apiServerMatch ? apiServerMatch[1] : watchedConfigParam1 || 'YOUR_K8S_API_SERVER'
-        }];
-        if (watchedConfigParam2) baseConfig.kubernetes_sd_configs[0].bearer_token_file = "/path/to/token";
-    } else if (targetsMatch) {
-        const targets = targetsMatch[1].split(',').map(t => t.trim().replace(/'/g, ''));
-        baseConfig.static_configs = [{ targets }];
-    } else if (watchedConfigParam1) {
-         baseConfig.static_configs = [{ targets: [watchedConfigParam1] }];
+        } else if (configString.includes("static_configs:")) {
+            const targetsMatch = configString.match(/targets:\s*\[([^\]]+)\]/);
+            if (targetsMatch) {
+                const targets = targetsMatch[1].split(',').map(t => t.trim().replace(/'/g, ''));
+                parsedConfig.static_configs = [{ targets }];
+            } else if (watchedConfigParam1) {
+                 // Fallback if regex fails but param1 exists (e.g. app endpoint)
+                let target = watchedConfigParam1;
+                if (watchedType === "Server" || watchedType === "Ubuntu Server" || watchedType === "Windows Server" || watchedType === "Database") {
+                   target = `${watchedConfigParam1}:${watchedConfigParam2 || assetTypeConfigPlaceholders[watchedType]?.param2.match(/\d+/)?.[0] || 'PORT'}`;
+                }
+                 parsedConfig.static_configs = [{ targets: [target] }];
+            }
+        }
+        
+        const metricsPathMatch = configString.match(/metrics_path:\s*([^\s]+)/);
+        if (metricsPathMatch && metricsPathMatch[1]) {
+            parsedConfig.metrics_path = metricsPathMatch[1];
+        }
+
+        return parsedConfig;
+    } catch (e) {
+        return { job_name: 'parsing_error', error: 'Could not parse generated config string into an object.'};
     }
-    return baseConfig;
   })();
   
   const generatedConfigStringForDisplay = getMockPrometheusConfig({
@@ -121,10 +137,14 @@ export function AssetConnectionWizard({ onSaveComplete }: AssetConnectionWizardP
   };
 
   const onSubmit = (data: CurrentFormData) => {
+    if (generatedConfigObject.error || generatedConfigObject.job_name === 'incomplete_config') {
+        alert(`Cannot save asset. Configuration is incomplete or has errors: ${generatedConfigObject.error || 'Please fill required fields.'}`);
+        return;
+    }
     const newAssetData: Omit<Asset, 'id' | 'lastChecked' | 'status'> = {
       name: data.name,
       type: data.type,
-      configuration: generatedConfigObject,
+      configuration: generatedConfigObject, // Use the parsed object
       tags: data.tags ? data.tags.split(',').map(t => t.trim()).filter(t => t) : [],
       folderId: data.folderId === NO_FOLDER_VALUE ? undefined : data.folderId,
     };
@@ -134,7 +154,7 @@ export function AssetConnectionWizard({ onSaveComplete }: AssetConnectionWizardP
   };
 
   const handleTestConnection = () => {
-    alert("Mock Test Connection: Simulating validation...");
+    alert("Mock Test Connection: Simulating validation for " + (watchedName || "new asset") + "...");
   };
 
   const handleDownloadYaml = () => {
@@ -144,6 +164,9 @@ export function AssetConnectionWizard({ onSaveComplete }: AssetConnectionWizardP
     }
 
     const filename = `${watchedName?.toLowerCase().replace(/\s+/g, '_') || 'prometheus_config'}.yaml`;
+    const yamlContent = `scrape_configs:\n  - ${JSON.stringify(generatedConfigObject, null, 2).replace(/^\{\n/, '').replace(/\n\}$/, '')}`;
+    
+    // We want the string display which is more complete for the user's prometheus.yml
     const blob = new Blob([generatedConfigStringForDisplay], { type: 'application/x-yaml' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -171,7 +194,7 @@ export function AssetConnectionWizard({ onSaveComplete }: AssetConnectionWizardP
         </div>
       </div>
       <form onSubmit={form.handleSubmit(onSubmit)}>
-        <div className="space-y-6 min-h-[300px] p-6 max-h-[calc(80vh-150px)] overflow-y-auto"> {/* Adjusted max-h slightly */}
+        <div className="space-y-6 min-h-[300px] p-6 max-h-[calc(80vh-200px)] overflow-y-auto"> {/* Adjusted max-h */}
           {currentStep === 1 && (
             <>
               <div>
@@ -247,7 +270,7 @@ export function AssetConnectionWizard({ onSaveComplete }: AssetConnectionWizardP
                 <ScrollArea className="h-40 w-full rounded-md border p-2 bg-muted/30">
                   <pre className="text-xs font-code whitespace-pre-wrap">{generatedConfigStringForDisplay}</pre>
                 </ScrollArea>
-                <p className="text-xs text-muted-foreground mt-1">This is a simplified preview. The actual saved configuration will be an object derived from this.</p>
+                <p className="text-xs text-muted-foreground mt-1">This is a preview. The actual saved configuration will be the primary job object derived from this YAML structure.</p>
               </div>
             </>
           )}
@@ -259,11 +282,11 @@ export function AssetConnectionWizard({ onSaveComplete }: AssetConnectionWizardP
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 <div>
                   <Label className="font-semibold block mb-1.5">Connection Instructions for {watchedType}</Label>
-                  <ScrollArea className="h-72 w-full rounded-md border p-3 bg-muted/20">
+                  <ScrollArea className="h-56 w-full rounded-md border p-3 bg-muted/20">
                     {instructionSteps.length > 0 ? (
                       <ol className="list-decimal list-inside space-y-3 text-sm">
                         {instructionSteps.map((step, index) => (
-                          <li key={index}>{step}</li>
+                           <li key={index} dangerouslySetInnerHTML={{ __html: step.replace(/```yaml\n([\s\S]*?)\n```/g, '<pre class="bg-muted/50 p-2 rounded-md text-xs font-code my-1 whitespace-pre-wrap">$1</pre>').replace(/`([^`]+)`/g, '<code class="bg-muted/50 px-1 py-0.5 rounded-sm text-xs font-code">$1</code>') }}></li>
                         ))}
                       </ol>
                     ) : (
@@ -280,7 +303,7 @@ export function AssetConnectionWizard({ onSaveComplete }: AssetConnectionWizardP
                       Download YAML
                     </Button>
                   </div>
-                  <ScrollArea className="h-72 w-full rounded-md border p-2 bg-muted/30">
+                  <ScrollArea className="h-56 w-full rounded-md border p-2 bg-muted/30">
                     <pre className="text-xs font-code whitespace-pre-wrap">{generatedConfigStringForDisplay}</pre>
                   </ScrollArea>
                   <p className="text-xs text-muted-foreground mt-1">This is the content for your `prometheus.yml` file. The object stored internally will be the first job definition from `scrape_configs`.</p>

@@ -14,16 +14,16 @@ import { ExternalLink, X, PlusCircle, Edit, Settings2, Info, Tag, ListChecks, Fi
 import React, { useState, useEffect } from 'react';
 import { useToast } from '@/hooks/use-toast';
 import { getMockInstructions } from '@/lib/asset-utils';
-import { EditAssetConfigurationDialog } from './edit-asset-configuration-dialog'; // Import the new dialog
+import { EditAssetConfigurationDialog } from './edit-asset-configuration-dialog';
 import { cn } from '@/lib/utils';
 
 interface AssetDetailsDialogProps {
   asset: Asset | null;
-  allFolders: AssetFolder[]; // Pass all folders for name lookup
+  allFolders: AssetFolder[];
   isOpen: boolean;
   onOpenChange: (isOpen: boolean) => void;
   onSaveTags: (assetId: string, tags: string[]) => void;
-  onConfigurationSave: (updatedAsset: Asset) => void; // Callback when configuration is saved
+  onConfigurationSave: (updatedAsset: Asset) => void;
 }
 
 export function AssetDetailsDialog({ asset, allFolders, isOpen, onOpenChange, onSaveTags, onConfigurationSave }: AssetDetailsDialogProps) {
@@ -35,13 +35,12 @@ export function AssetDetailsDialog({ asset, allFolders, isOpen, onOpenChange, on
 
   useEffect(() => {
     if (asset) {
-      setCurrentAssetForEdit(asset); // Keep a local copy for the edit dialog
+      setCurrentAssetForEdit(asset);
       setCurrentTags(asset.tags ? [...asset.tags] : []);
     } else {
       setCurrentTags([]);
       setCurrentAssetForEdit(null);
     }
-    // Reset tag input when dialog opens or asset changes
     setTagInput('');
   }, [asset, isOpen]);
 
@@ -65,7 +64,6 @@ export function AssetDetailsDialog({ asset, allFolders, isOpen, onOpenChange, on
 
   const handleSaveTagsLocal = () => {
     onSaveTags(asset.id, currentTags);
-    // No need to close dialog, user might want to do other things
     toast({ title: "Tags Updated", description: `Tags for ${asset.name} saved.` });
   };
 
@@ -76,8 +74,8 @@ export function AssetDetailsDialog({ asset, allFolders, isOpen, onOpenChange, on
   const handleSaveConfiguration = (assetId: string, newConfiguration: Record<string, any>) => {
     const updatedAsset = updateAssetConfiguration(assetId, newConfiguration);
     if (updatedAsset) {
-      setCurrentAssetForEdit(updatedAsset); // Update local state for dialog
-      onConfigurationSave(updatedAsset); // Propagate to parent
+      setCurrentAssetForEdit(updatedAsset);
+      onConfigurationSave(updatedAsset);
       toast({ title: "Configuration Saved", description: `Configuration for ${updatedAsset.name} has been updated.` });
     } else {
       toast({ title: "Error", description: "Failed to save configuration.", variant: "destructive" });
@@ -137,11 +135,6 @@ export function AssetDetailsDialog({ asset, allFolders, isOpen, onOpenChange, on
                  <div className="p-4 rounded-lg border bg-card/50">
                     <h3 className="font-headline text-lg mb-2">Key Metrics (Placeholder)</h3>
                     <p className="text-sm text-muted-foreground">Key performance indicators and metrics for this asset would appear here.</p>
-                    {/* Example placeholder:
-                    <p>CPU Usage: <strong>35%</strong></p>
-                    <p>Memory Usage: <strong>60%</strong></p>
-                    <p>Disk I/O: <strong>150 ops/sec</strong></p>
-                    */}
                 </div>
               </TabsContent>
 
@@ -206,11 +199,13 @@ export function AssetDetailsDialog({ asset, allFolders, isOpen, onOpenChange, on
                 <div className="p-4 rounded-lg border bg-card/50">
                   <h3 className="font-headline text-lg mb-2">Connection Instructions</h3>
                   {instructionSteps.length > 0 ? (
-                    <ol className="list-decimal list-inside space-y-2 text-sm text-muted-foreground pl-4">
-                      {instructionSteps.map((step, index) => (
-                        <li key={index}>{step}</li>
-                      ))}
-                    </ol>
+                    <ScrollArea className="h-64 w-full rounded-md p-1">
+                        <ol className="list-decimal list-inside space-y-2 text-sm text-muted-foreground pl-4">
+                        {instructionSteps.map((step, index) => (
+                            <li key={index} dangerouslySetInnerHTML={{ __html: step.replace(/```yaml\n([\s\S]*?)\n```/g, '<pre class="bg-muted/50 p-2 rounded-md text-xs font-code my-1 whitespace-pre-wrap">$1</pre>').replace(/`([^`]+)`/g, '<code class="bg-muted/50 px-1 py-0.5 rounded-sm text-xs font-code">$1</code>') }}></li>
+                        ))}
+                        </ol>
+                    </ScrollArea>
                   ) : (
                     <p className="text-sm text-muted-foreground">No specific instructions available for this asset type.</p>
                   )}
@@ -223,7 +218,6 @@ export function AssetDetailsDialog({ asset, allFolders, isOpen, onOpenChange, on
             <DialogClose asChild>
               <Button type="button" variant="outline">Close</Button>
             </DialogClose>
-            {/* This button now specifically saves tags. Config is saved via its own dialog. */}
             <Button type="button" onClick={handleSaveTagsLocal}>Save Tags</Button>
           </DialogFooter>
         </DialogContent>

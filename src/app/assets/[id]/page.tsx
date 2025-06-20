@@ -5,11 +5,11 @@ import React, { useState, useEffect } from 'react';
 import { AppLayout } from '@/components/layout/app-layout';
 import { useParams } from 'next/navigation';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
-import { mockAssetsData, mockFoldersData, updateAssetConfiguration as updateMockAssetConfiguration } from '@/lib/mock-data'; // Renamed import for clarity
+import { mockAssetsData, mockFoldersData, updateAssetConfiguration as updateMockAssetConfiguration } from '@/lib/mock-data';
 import type { Asset } from '@/types';
 import { Button } from '@/components/ui/button';
 import Link from 'next/link';
-import { ArrowLeft, Edit, ExternalLink } from 'lucide-react';
+import { ArrowLeft, Edit, ExternalLink, TestTubeDiagonal } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { getMockInstructions } from '@/lib/asset-utils';
@@ -21,27 +21,27 @@ export default function AssetDetailsPage() {
   const assetId = params.id as string;
   const { toast } = useToast();
 
-  // Local state for the asset to reflect updates, e.g. after config edit
-  const [asset, setAsset] = useState<Asset | null | undefined>(undefined); // undefined for loading state
+  const [asset, setAsset] = useState<Asset | null | undefined>(undefined);
   const [isEditConfigOpen, setIsEditConfigOpen] = useState(false);
 
   useEffect(() => {
-    // In a real app, fetch asset data here based on assetId
     const foundAsset = mockAssetsData.find(a => a.id === assetId);
-    setAsset(foundAsset || null); // Set to null if not found after "fetch"
+    setAsset(foundAsset || null);
   }, [assetId]);
 
   const handleSaveConfiguration = (id: string, newConfiguration: Record<string, any>) => {
     const updatedAsset = updateMockAssetConfiguration(id, newConfiguration);
     if (updatedAsset) {
-      setAsset(updatedAsset); // Update local state to re-render with new config
-      // Note: This updates mockAssetsData in-memory. If this page were part of a larger SPA state,
-      // you might need a global state update or callback to inform other components.
+      setAsset(updatedAsset);
       toast({ title: "Configuration Saved", description: `Configuration for ${updatedAsset.name} has been updated.`});
     } else {
       toast({ title: "Error", description: "Failed to save configuration.", variant: "destructive"});
     }
     setIsEditConfigOpen(false);
+  };
+
+  const handleTestConnection = () => {
+    alert("Mock Test Connection: Simulating validation for " + asset?.name);
   };
   
   if (asset === undefined) {
@@ -92,9 +92,12 @@ export default function AssetDetailsPage() {
                     <CardTitle className="font-headline text-3xl">{asset.name}</CardTitle>
                     <CardDescription className="text-base">{asset.type} Asset Details</CardDescription>
                 </div>
-                <div className="flex gap-2 mt-2 sm:mt-0">
+                <div className="flex flex-wrap gap-2 mt-2 sm:mt-0">
                     <Button variant="outline" onClick={() => setIsEditConfigOpen(true)}>
                         <Edit className="mr-2 h-4 w-4"/>Edit Configuration
+                    </Button>
+                     <Button variant="outline" onClick={handleTestConnection}>
+                        <TestTubeDiagonal className="mr-2 h-4 w-4"/>Test Connection (Mock)
                     </Button>
                     {asset.grafanaLink && (
                          <a href={asset.grafanaLink} target="_blank" rel="noopener noreferrer">
@@ -125,7 +128,7 @@ export default function AssetDetailsPage() {
                         <CardTitle className="font-headline text-xl">Prometheus Configuration</CardTitle>
                     </CardHeader>
                     <CardContent>
-                        <ScrollArea className="h-60 w-full rounded-md border p-3 bg-muted/30">
+                        <ScrollArea className="h-48 w-full rounded-md border p-3 bg-muted/30">
                             <pre className="text-sm font-code whitespace-pre-wrap">
                                 {JSON.stringify({ scrape_configs: [asset.configuration] }, null, 2)}
                             </pre>
@@ -160,11 +163,13 @@ export default function AssetDetailsPage() {
                     </CardHeader>
                     <CardContent>
                         {instructionSteps.length > 0 ? (
-                            <ol className="list-decimal list-inside space-y-2 text-sm text-muted-foreground pl-1">
-                                {instructionSteps.map((step, index) => (
-                                <li key={index}>{step}</li>
-                                ))}
-                            </ol>
+                            <ScrollArea className="h-60 w-full rounded-md p-1">
+                                <ol className="list-decimal list-inside space-y-2 text-sm text-muted-foreground pl-1">
+                                    {instructionSteps.map((step, index) => (
+                                    <li key={index} dangerouslySetInnerHTML={{ __html: step.replace(/```yaml\n([\s\S]*?)\n```/g, '<pre class="bg-muted/50 p-2 rounded-md text-xs font-code my-1 whitespace-pre-wrap">$1</pre>').replace(/`([^`]+)`/g, '<code class="bg-muted/50 px-1 py-0.5 rounded-sm text-xs font-code">$1</code>') }}></li>
+                                    ))}
+                                </ol>
+                            </ScrollArea>
                         ) : (
                             <p className="text-sm text-muted-foreground">No specific instructions available for this asset type.</p>
                         )}
