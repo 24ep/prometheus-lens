@@ -1,7 +1,7 @@
 
 "use client";
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { AppLayout } from '@/components/layout/app-layout';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -46,7 +46,7 @@ const SettingsFolderTreeItem: React.FC<SettingsFolderTreeItemProps> = ({
           {hasChildren ? (
             isOpen ? <ChevronDown className="h-4 w-4 shrink-0" /> : <ChevronRight className="h-4 w-4 shrink-0" />
           ) : (
-            <div className="w-4 h-4 shrink-0"></div> 
+            <div className="w-4 h-4 shrink-0"></div>
           )}
           <FolderIcon className="h-5 w-5 text-primary shrink-0" />
           <span className="font-medium truncate" title={folder.name}>{folder.name}</span>
@@ -67,7 +67,7 @@ const SettingsFolderTreeItem: React.FC<SettingsFolderTreeItemProps> = ({
               key={child.id}
               folder={child}
               allFolders={allFolders}
-              level={0} 
+              level={0}
               onEditFolder={onEditFolder}
               onDeleteFolder={onDeleteFolder}
               initiallyOpen={false}
@@ -150,7 +150,7 @@ export default function SettingsPage() {
           <CardTitle className="font-headline text-3xl">Settings</CardTitle>
           <CardDescription>Manage your application preferences and configurations.</CardDescription>
         </CardHeader>
-        
+
         <div className="space-y-8">
           <Card className="glassmorphic">
             <CardHeader>
@@ -181,7 +181,7 @@ export default function SettingsPage() {
               </div>
               <div className="space-y-2">
                 <Label htmlFor="defaultDashboardView">Default Dashboard View</Label>
-                <Input id="defaultDashboardView" value="List View (Current Default)" disabled /> 
+                <Input id="defaultDashboardView" value="List View (Current Default)" disabled />
                 <p className="text-xs text-muted-foreground">This setting is currently illustrative.</p>
               </div>
             </CardContent>
@@ -210,7 +210,7 @@ export default function SettingsPage() {
                 <Button disabled>Save Integration Settings</Button>
             </CardFooter>
           </Card>
-          
+
           <Card className="glassmorphic">
             <CardHeader className="flex flex-row justify-between items-center">
               <div>
