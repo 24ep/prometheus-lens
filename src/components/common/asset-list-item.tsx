@@ -5,7 +5,7 @@ import type { Asset } from '@/types';
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Server, Network, AppWindow, Database, Box, ExternalLink, Info, CheckCircle2, XCircle, AlertTriangle, Hourglass, Container } from 'lucide-react';
+import { Server, Network, AppWindow, Database, Box, ExternalLink, Info, CheckCircle2, XCircle, AlertTriangle, Hourglass, Container, Briefcase } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { formatDistanceToNow } from 'date-fns';
 
@@ -21,17 +21,17 @@ const assetIcons: Record<Asset['type'], React.ElementType> = {
   PostgreSQL: Database,
   MySQL: Database,
   MongoDB: Database,
-  Kubernetes: Box,
-  Docker: Container,
+  Kubernetes: Container, // Changed from Box for better k8s representation
+  Docker: Briefcase, // Using Briefcase for Docker as Container is now k8s
   "Ubuntu Server": Server,
   "Windows Server": Server,
 };
 
 const statusTextColors: Record<Asset['status'], string> = {
-  connected: 'text-green-700 dark:text-green-400',
-  disconnected: 'text-red-700 dark:text-red-400',
-  error: 'text-amber-700 dark:text-amber-400',
-  pending: 'text-blue-700 dark:text-blue-400',
+  connected: 'text-green-600 dark:text-green-500',
+  disconnected: 'text-red-600 dark:text-red-500',
+  error: 'text-amber-600 dark:text-amber-500',
+  pending: 'text-blue-600 dark:text-blue-500',
 };
 
 const statusIcons: Record<Asset['status'], React.ElementType> = {
@@ -42,69 +42,51 @@ const statusIcons: Record<Asset['status'], React.ElementType> = {
 };
 
 export function AssetListItem({ asset, onDetailsClick }: AssetListItemProps) {
-  const AssetIcon = assetIcons[asset.type] || Server; // Fallback for safety
+  const AssetIcon = assetIcons[asset.type] || Server;
   const StatusIcon = statusIcons[asset.status];
 
   return (
-    <Card className="glassmorphic overflow-hidden transition-all hover:shadow-lg w-full">
-      <CardContent className="p-3 flex flex-col gap-2 w-full text-sm">
-        {/* Top section: Icon, Name, Type, Status */}
-        <div className="flex justify-between items-start">
-          <div className="flex items-center gap-2.5">
-            <AssetIcon className="h-6 w-6 text-primary shrink-0" />
-            <div>
-              <button onClick={() => onDetailsClick(asset)} className="text-left hover:underline">
-                <h3 className="font-headline font-semibold text-base leading-tight" title={asset.name}>{asset.name}</h3>
-              </button>
-              <p className="text-xs text-muted-foreground">{asset.type}</p>
-            </div>
-          </div>
-          <div className="flex items-center gap-1 whitespace-nowrap text-xs" title={`Status: ${asset.status}`}>
-            <StatusIcon className={cn("h-3.5 w-3.5 shrink-0", statusTextColors[asset.status])} />
-            <span className={cn("capitalize", statusTextColors[asset.status])}>{asset.status}</span>
+    <div className="group flex items-center gap-3 px-3 py-2.5 hover:bg-muted/50 rounded-md transition-colors duration-150">
+      <AssetIcon className={cn("h-7 w-7 shrink-0", statusTextColors[asset.status] || 'text-primary')} />
+      <div className="flex-grow min-w-0">
+        <div className="flex items-center justify-between">
+          <button onClick={() => onDetailsClick(asset)} className="text-left hover:underline focus:outline-none">
+            <h3 className="font-headline font-medium text-base leading-tight truncate" title={asset.name}>
+              {asset.name}
+            </h3>
+          </button>
+          <div className="flex items-center gap-1.5 whitespace-nowrap text-xs ml-2 shrink-0">
+            <StatusIcon className={cn("h-3.5 w-3.5", statusTextColors[asset.status])} />
+            <span className={cn("capitalize font-medium", statusTextColors[asset.status])}>{asset.status}</span>
           </div>
         </div>
-
-        {/* Middle section: Last Checked, Tags */}
-        <div className="space-y-1.5">
-          <div className="text-xs text-muted-foreground">
-            Last Checked: {formatDistanceToNow(new Date(asset.lastChecked), { addSuffix: true })}
-          </div>
-
-          {asset.tags && asset.tags.length > 0 && (
-            <div className="flex flex-wrap gap-1">
-              {asset.tags.map(tag => (
-                <Badge key={tag} variant="secondary" className="text-xs px-1.5 py-0.5">{tag}</Badge>
-              ))}
-            </div>
-          )}
-          {asset.tags && asset.tags.length === 0 && (
-            <p className="text-xs text-muted-foreground italic">No tags</p>
-          )}
-        </div>
-        
-        {/* Bottom section: Actions */}
-        <div className="flex gap-1.5 justify-end mt-0.5">
-          <Button variant="outline" size="sm" onClick={() => onDetailsClick(asset)}>
-            <Info className="mr-1.5 h-3.5 w-3.5" />
-            <span className="hidden sm:inline">Details</span>
-          </Button>
-          <Button
-            variant="ghost"
-            size="sm"
-            disabled={!asset.grafanaLink}
-            onClick={() => asset.grafanaLink && window.open(asset.grafanaLink, '_blank', 'noopener,noreferrer')}
-            className={cn(
-              "text-primary hover:text-accent-foreground hover:bg-accent",
-              !asset.grafanaLink && "text-muted-foreground hover:text-muted-foreground hover:bg-transparent cursor-not-allowed"
+        <p className="text-xs text-muted-foreground">{asset.type} &bull; Last checked: {formatDistanceToNow(new Date(asset.lastChecked), { addSuffix: true })}</p>
+        {asset.tags && asset.tags.length > 0 && (
+          <div className="mt-1 flex flex-wrap gap-1">
+            {asset.tags.slice(0, 3).map(tag => ( // Show max 3 tags inline
+              <Badge key={tag} variant="secondary" className="text-xs px-1.5 py-0.5">{tag}</Badge>
+            ))}
+            {asset.tags.length > 3 && (
+              <Badge variant="secondary" className="text-xs px-1.5 py-0.5">+{asset.tags.length - 3} more</Badge>
             )}
-            aria-label={asset.grafanaLink ? "Open in Grafana" : "Grafana link not available"}
-          >
-            <span className="hidden sm:inline">Grafana</span> <ExternalLink className="ml-0 sm:ml-1.5 h-3.5 w-3.5" />
-          </Button>
-        </div>
-      </CardContent>
-    </Card>
+          </div>
+        )}
+      </div>
+      <div className="flex gap-1.5 shrink-0 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity duration-150">
+        <Button variant="ghost" size="sm" onClick={() => onDetailsClick(asset)} title="View Details">
+          <Info className="mr-1 h-3.5 w-3.5" /> Details
+        </Button>
+        <Button
+          variant="ghost"
+          size="sm"
+          disabled={!asset.grafanaLink}
+          onClick={() => asset.grafanaLink && window.open(asset.grafanaLink, '_blank', 'noopener,noreferrer')}
+          className={cn(!asset.grafanaLink && "text-muted-foreground hover:text-muted-foreground")}
+          title={asset.grafanaLink ? "Open in Grafana" : "Grafana link not available"}
+        >
+          <ExternalLink className="mr-1 h-3.5 w-3.5" /> Grafana
+        </Button>
+      </div>
+    </div>
   );
 }
-

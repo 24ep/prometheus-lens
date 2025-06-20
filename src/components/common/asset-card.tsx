@@ -5,7 +5,7 @@ import type { Asset } from '@/types';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Server, Network, AppWindow, Database, Box, ExternalLink, Zap, XCircle, AlertTriangle, CheckCircle2, Hourglass, Info, Container } from 'lucide-react';
+import { Server, Network, AppWindow, Database, Box, ExternalLink, Zap, XCircle, AlertTriangle, CheckCircle2, Hourglass, Info, Container, Briefcase } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { formatDistanceToNow } from 'date-fns';
 
@@ -21,8 +21,8 @@ const assetIcons: Record<Asset['type'], React.ElementType> = {
   PostgreSQL: Database,
   MySQL: Database,
   MongoDB: Database,
-  Kubernetes: Box,
-  Docker: Container,
+  Kubernetes: Container, // Changed from Box for better k8s representation
+  Docker: Briefcase, // Using Briefcase for Docker as Container is now k8s
   "Ubuntu Server": Server,
   "Windows Server": Server,
 };
@@ -42,16 +42,16 @@ const statusIcons: Record<Asset['status'], React.ElementType> = {
 };
 
 export function AssetCard({ asset, onDetailsClick }: AssetCardProps) {
-  const Icon = assetIcons[asset.type] || Server; // Fallback to Server icon if type is new and unmapped
+  const Icon = assetIcons[asset.type] || Server; // Fallback to Server icon
   const StatusIcon = statusIcons[asset.status];
 
   return (
     <Card className="glassmorphic overflow-hidden transition-all hover:shadow-xl hover:scale-[1.015] flex flex-col h-full">
       <CardHeader className="pb-3">
         <div className="flex items-start justify-between">
-          <div className="flex items-center gap-3">
-            <Icon className="h-8 w-8 text-primary" />
-            <CardTitle className="font-headline text-lg leading-tight">{asset.name}</CardTitle>
+          <div className="flex items-center gap-3 min-w-0"> {/* Added min-w-0 for truncation */}
+            <Icon className="h-8 w-8 text-primary shrink-0" />
+            <CardTitle className="font-headline text-lg leading-tight truncate" title={asset.name}>{asset.name}</CardTitle>
           </div>
           <Badge variant="outline" className={cn("capitalize text-xs", statusColors[asset.status])}>
             <StatusIcon className="h-3.5 w-3.5 mr-1.5" />
@@ -101,4 +101,3 @@ export function AssetCard({ asset, onDetailsClick }: AssetCardProps) {
     </Card>
   );
 }
-

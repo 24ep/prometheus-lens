@@ -2,14 +2,11 @@
 "use client";
 
 import { AppLayout } from '@/components/layout/app-layout';
-import { AssetCard } from '@/components/common/asset-card';
 import { AssetListItem } from '@/components/common/asset-list-item';
 import { mockAssetsData, mockFoldersData, addFolder, updateFolder as updateMockFolder, deleteFolder, updateAssetTags } from '@/lib/mock-data';
 import type { Asset, AssetFolder } from '@/types';
 import { Button } from '@/components/ui/button';
-// Link removed as direct navigation to new asset page from here is replaced by dialog
-// import { useRouter } from 'next/navigation'; // Potentially not needed if wizard handles itself or through callbacks
-import { PlusCircle, Filter, LayoutGrid, List, Edit2, Trash2, Package } from 'lucide-react'; // FolderPlus, PackagePlus removed
+import { PlusCircle, Filter, Edit2, Trash2, Folder as FolderIcon, ChevronDown, ChevronRight } from 'lucide-react';
 import {
   Select,
   SelectContent,
@@ -17,22 +14,101 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import { Input } from '@/components/ui/input';
 import { AssetDetailsDialog } from '@/components/assets/asset-details-dialog';
 import { CreateItemTypeDialog } from '@/components/folders/create-item-type-dialog';
 import { ManageFolderDialog } from '@/components/folders/manage-folder-dialog';
 import { ConfirmDialog } from '@/components/common/confirm-dialog';
 import { useToast } from '@/hooks/use-toast';
-import { Dialog, DialogContent } from '@/components/ui/dialog'; // Import Dialog components
-import { AssetConnectionWizard } from '@/components/assets/asset-connection-wizard'; // Import the wizard
+import { Dialog, DialogContent } from '@/components/ui/dialog';
+import { AssetConnectionWizard } from '@/components/assets/asset-connection-wizard';
+import { cn } from '@/lib/utils';
 
-export default function AllAssetsPage() { // Renamed component for clarity
-  // const router = useRouter(); // May not be needed
+interface FolderTreeItemProps {
+  folder: AssetFolder;
+  allFolders: AssetFolder[];
+  level: number;
+  assetsInFolder: Asset[];
+  onEditFolder: (folder: AssetFolder) => void;
+  onDeleteFolder: (folder: AssetFolder) => void;
+  onAssetDetailsClick: (asset: Asset) => void;
+  initiallyOpen?: boolean;
+}
+
+const FolderTreeItem: React.FC<FolderTreeItemProps> = ({
+  folder,
+  allFolders,
+  level,
+  assetsInFolder,
+  onEditFolder,
+  onDeleteFolder,
+  onAssetDetailsClick,
+  initiallyOpen = false,
+}) => {
+  const [isOpen, setIsOpen] = useState(initiallyOpen);
+  const childFolders = allFolders.filter(f => f.parentId === folder.id).sort((a,b) => a.name.localeCompare(b.name));
+
+  const hasContent = assetsInFolder.length > 0 || childFolders.length > 0;
+
+  return (
+    <div style={{ paddingLeft: `${level * 1.5}rem` }} className="my-1">
+      <div className="flex justify-between items-center py-2 px-2 rounded-md hover:bg-muted/60 group">
+        <div className="flex items-center gap-1.5 flex-grow min-w-0" onClick={() => hasContent && setIsOpen(!isOpen)} role="button" tabIndex={0} onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && hasContent && setIsOpen(!isOpen)} >
+          {hasContent ? (
+            isOpen ? <ChevronDown className="h-4 w-4 shrink-0" /> : <ChevronRight className="h-4 w-4 shrink-0" />
+          ) : (
+            <div className="w-4 h-4 shrink-0"></div> // Placeholder for alignment
+          )}
+          <FolderIcon className="h-5 w-5 text-primary shrink-0" />
+          <span className="font-headline font-medium text-lg truncate" title={folder.name}>{folder.name}</span>
+          <span className="text-sm text-muted-foreground ml-1">({assetsInFolder.length})</span>
+        </div>
+        <div className="flex gap-1 shrink-0 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity">
+          <Button variant="ghost" size="icon" onClick={() => onEditFolder(folder)} aria-label={`Edit folder ${folder.name}`}>
+            <Edit2 className="h-4 w-4 text-muted-foreground hover:text-primary" />
+          </Button>
+          <Button variant="ghost" size="icon" onClick={() => onDeleteFolder(folder)} aria-label={`Delete folder ${folder.name}`}>
+            <Trash2 className="h-4 w-4 text-muted-foreground hover:text-destructive" />
+          </Button>
+        </div>
+      </div>
+      {isOpen && (
+        <div className="mt-1 border-l-2 border-muted pl-3 ml-[7px]"> {/* Indent content under folder icon */}
+          {childFolders.map(child => (
+            <FolderTreeItem
+              key={child.id}
+              folder={child}
+              allFolders={allFolders}
+              level={0} // Child folders are visually indented, level 0 for their own asset/subfolder block
+              assetsInFolder={allFolders.flatMap(f => f.parentId === child.id ? [] : mockAssetsData.filter(a => a.folderId === child.id))} // simplification
+              onEditFolder={onEditFolder}
+              onDeleteFolder={onDeleteFolder}
+              onAssetDetailsClick={onAssetDetailsClick}
+              initiallyOpen={false}
+            />
+          ))}
+          {assetsInFolder.length > 0 && (
+            <div className="space-y-1.5 py-1">
+              {assetsInFolder.map(asset => (
+                <AssetListItem key={asset.id} asset={asset} onDetailsClick={onAssetDetailsClick} />
+              ))}
+            </div>
+          )}
+           {assetsInFolder.length === 0 && childFolders.length === 0 && (
+             <p className="text-xs text-muted-foreground py-1 px-2 italic">This folder is empty or assets are filtered.</p>
+           )}
+        </div>
+      )}
+    </div>
+  );
+};
+
+
+export default function AllAssetsPage() {
   const { toast } = useToast();
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedFolderFilter, setSelectedFolderFilter] = useState<string | 'all'>('all');
-  const [viewMode, setViewMode] = useState<'list' | 'grid'>('list');
   
   const [assets, setAssets] = useState<Asset[]>([]);
   const [folders, setFolders] = useState<AssetFolder[]>([]);
@@ -45,60 +121,48 @@ export default function AllAssetsPage() { // Renamed component for clarity
   const [folderToEdit, setFolderToEdit] = useState<AssetFolder | null>(null);
   const [isConfirmDeleteFolderDialogOpen, setIsConfirmDeleteFolderDialogOpen] = useState(false);
   const [folderToDelete, setFolderToDelete] = useState<AssetFolder | null>(null);
+  const [isAssetWizardOpen, setIsAssetWizardOpen] = useState(false);
 
-  const [isAssetWizardOpen, setIsAssetWizardOpen] = useState(false); // State for wizard dialog
+  const refreshData = useCallback(() => {
+    setAssets([...mockAssetsData]); // Creates a new array reference
+    setFolders([...mockFoldersData].sort((a, b) => a.name.localeCompare(b.name))); // New sorted array
+  }, []);
 
-  const refreshData = () => {
-    setAssets([...mockAssetsData]);
-    setFolders([...mockFoldersData]);
-  };
 
   useEffect(() => {
     refreshData();
-  }, []);
+  }, [refreshData]);
 
+  const getFolderAndSubFolderIds = useCallback((folderId: string, allFolders: AssetFolder[]): string[] => {
+    let ids = [folderId];
+    const children = allFolders.filter(f => f.parentId === folderId);
+    for (const child of children) {
+      ids = ids.concat(getFolderAndSubFolderIds(child.id, allFolders));
+    }
+    return ids;
+  }, []);
 
   const filteredAssets = useMemo(() => {
     return assets.filter(asset => {
       const matchesSearch = asset.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
                             asset.type.toLowerCase().includes(searchTerm.toLowerCase()) ||
                             (asset.tags && asset.tags.some(tag => tag.toLowerCase().includes(searchTerm.toLowerCase())));
-      const matchesFolder = selectedFolderFilter === 'all' || asset.folderId === selectedFolderFilter || (selectedFolderFilter === 'unfiled' && !asset.folderId);
+      
+      let matchesFolder = false;
+      if (selectedFolderFilter === 'all') {
+        matchesFolder = true;
+      } else if (selectedFolderFilter === 'unfiled') {
+        matchesFolder = !asset.folderId;
+      } else {
+        const folderIdsToMatch = getFolderAndSubFolderIds(selectedFolderFilter, folders);
+        matchesFolder = asset.folderId ? folderIdsToMatch.includes(asset.folderId) : false;
+      }
       return matchesSearch && matchesFolder;
     });
-  }, [searchTerm, selectedFolderFilter, assets]);
+  }, [searchTerm, selectedFolderFilter, assets, folders, getFolderAndSubFolderIds]);
 
-  const assetsByFolder = useMemo(() => {
-    const grouped: Record<string, { name: string; id: string; assets: Asset[] }> = {};
-    const folderMap = new Map(folders.map(f => [f.id, f.name]));
-
-    filteredAssets.forEach(asset => {
-      const folderId = asset.folderId || 'unfiled';
-      const folderName = asset.folderId ? folderMap.get(asset.folderId) || 'Unknown Folder' : 'Uncategorized';
-      if (!grouped[folderId]) {
-        grouped[folderId] = { name: folderName, id: folderId, assets: [] };
-      }
-      grouped[folderId].assets.push(asset);
-    });
-    
-    if (selectedFolderFilter === 'all') {
-      folders.forEach(folder => {
-        if (!grouped[folder.id]) {
-          grouped[folder.id] = { name: folder.name, id: folder.id, assets: [] };
-        }
-      });
-      if (!grouped['unfiled'] && assets.some(a => !a.folderId)) {
-         grouped['unfiled'] = { name: 'Uncategorized', id: 'unfiled', assets: [] };
-      }
-    } else if (selectedFolderFilter !== 'unfiled' && !grouped[selectedFolderFilter] && folders.some(f => f.id === selectedFolderFilter)) {
-      grouped[selectedFolderFilter] = { name: folderMap.get(selectedFolderFilter) || 'Unknown Folder', id: selectedFolderFilter, assets: [] };
-    } else if (selectedFolderFilter === 'unfiled' && !grouped['unfiled']) {
-       grouped['unfiled'] = { name: 'Uncategorized', id: 'unfiled', assets: [] };
-    }
-    
-    return grouped;
-  }, [filteredAssets, selectedFolderFilter, folders, assets]);
-
+  const rootFolders = useMemo(() => folders.filter(f => !f.parentId).sort((a,b) => a.name.localeCompare(b.name)), [folders]);
+  const uncategorizedAssets = useMemo(() => filteredAssets.filter(asset => !asset.folderId), [filteredAssets]);
 
   const handleOpenAssetDetails = (asset: Asset) => {
     setSelectedAssetForDetails(asset);
@@ -106,26 +170,26 @@ export default function AllAssetsPage() { // Renamed component for clarity
   };
 
   const handleSaveAssetTags = (assetId: string, newTags: string[]) => {
-    const updatedAsset = updateAssetTags(assetId, newTags);
-    if (updatedAsset) {
-      setAssets(prevAssets => prevAssets.map(a => a.id === assetId ? updatedAsset : a));
-      if (selectedAssetForDetails && selectedAssetForDetails.id === assetId) {
-        setSelectedAssetForDetails(updatedAsset); 
-      }
+    updateAssetTags(assetId, newTags);
+    refreshData(); // Full refresh to ensure UI updates
+    if (selectedAssetForDetails && selectedAssetForDetails.id === assetId) {
+       const updatedAssetFromMock = mockAssetsData.find(a => a.id === assetId);
+       if (updatedAssetFromMock) setSelectedAssetForDetails(updatedAssetFromMock);
     }
   };
 
-  const handleAssetConfigurationSave = (updatedAsset: Asset) => {
-    setAssets(prevAssets => prevAssets.map(a => a.id === updatedAsset.id ? updatedAsset : a));
-    if (selectedAssetForDetails && selectedAssetForDetails.id === updatedAsset.id) {
-      setSelectedAssetForDetails(updatedAsset);
+  const handleAssetConfigurationSave = (updatedAssetFromDialog: Asset) => {
+    // The mockdata function already updates the array. We just need to refresh.
+    refreshData();
+    if (selectedAssetForDetails && selectedAssetForDetails.id === updatedAssetFromDialog.id) {
+       setSelectedAssetForDetails(updatedAssetFromDialog);
     }
   };
-
+  
   const handleCreateItemTypeSelection = (type: 'asset' | 'folder') => {
     setIsCreateItemTypeDialogOpen(false);
     if (type === 'asset') {
-      setIsAssetWizardOpen(true); // Open wizard dialog
+      setIsAssetWizardOpen(true);
     } else {
       setFolderToEdit(null); 
       setIsManageFolderDialogOpen(true);
@@ -133,7 +197,7 @@ export default function AllAssetsPage() { // Renamed component for clarity
   };
 
   const handleAssetWizardSave = (savedAsset: Asset) => {
-    refreshData(); // Or more specific update if needed
+    refreshData(); 
     setIsAssetWizardOpen(false);
     toast({
       title: "Asset Added!",
@@ -145,17 +209,15 @@ export default function AllAssetsPage() { // Renamed component for clarity
     if (folderData.id) { 
       const updated = updateMockFolder(folderData.id, folderData.name, folderData.parentId);
       if (updated) {
-        setFolders(prev => prev.map(f => f.id === updated.id ? updated : f));
         toast({ title: "Folder Updated", description: `Folder "${updated.name}" saved.`});
       }
     } else { 
       const newF = addFolder(folderData.name, folderData.parentId);
-      setFolders(prev => [...prev, newF]);
       toast({ title: "Folder Created", description: `Folder "${newF.name}" added.`});
     }
+    refreshData();
     setIsManageFolderDialogOpen(false);
     setFolderToEdit(null);
-    refreshData(); 
   };
 
   const handleEditFolder = (folder: AssetFolder) => {
@@ -170,21 +232,33 @@ export default function AllAssetsPage() { // Renamed component for clarity
 
   const confirmDeleteFolder = () => {
     if (folderToDelete) {
-      const success = deleteFolder(folderToDelete.id);
+      const success = deleteFolder(folderToDelete.id); // This also unassigns assets
       if (success) {
         toast({ title: "Folder Deleted", description: `Folder "${folderToDelete.name}" removed.`});
-        refreshData(); 
         if (selectedFolderFilter === folderToDelete.id) {
           setSelectedFolderFilter('all'); 
         }
       } else {
-        toast({ title: "Error", description: "Could not delete folder. It might not exist or have dependencies.", variant: "destructive"});
+        toast({ title: "Error", description: "Could not delete folder. It might not exist.", variant: "destructive"});
       }
+      refreshData();
     }
     setIsConfirmDeleteFolderDialogOpen(false);
     setFolderToDelete(null);
   };
   
+  const shouldDisplayFolder = (folder: AssetFolder): boolean => {
+    if (selectedFolderFilter === 'all') return true;
+    if (selectedFolderFilter === 'unfiled') return false; // Don't show any folders if filtering for uncategorized
+    // If a specific folder is selected, show it and its ancestors/descendants
+    // This logic can be complex for a perfect "show only this branch"
+    // For simplicity, we'll show all folders if a specific folder is selected,
+    // but assets will be filtered. A better approach might be to only render the selected branch.
+    // For now, if a folder filter is active, we still render the whole tree structure,
+    // but assets are filtered.
+    return true; 
+  };
+
 
   return (
     <AppLayout>
@@ -199,8 +273,8 @@ export default function AllAssetsPage() { // Renamed component for clarity
         </Button>
       </div>
 
-      <div className="mb-6 p-4 rounded-lg border">
-        <div className="grid grid-cols-1 md:grid-cols-[1fr_auto_auto] gap-4 items-end">
+      <div className="mb-6 p-4 rounded-lg border bg-card">
+        <div className="grid grid-cols-1 md:grid-cols-[1fr_auto] gap-4 items-end">
           <Input 
             placeholder="Search assets (name, type, tag)..."
             value={searchTerm}
@@ -208,99 +282,91 @@ export default function AllAssetsPage() { // Renamed component for clarity
             className="bg-background/70 focus:bg-background"
           />
           <Select value={selectedFolderFilter} onValueChange={setSelectedFolderFilter}>
-            <SelectTrigger className="w-full md:w-auto bg-background/70 focus:bg-background">
+            <SelectTrigger className="w-full md:w-[280px] bg-background/70 focus:bg-background">
               <Filter className="mr-2 h-4 w-4 text-muted-foreground" />
               <SelectValue placeholder="Filter by folder..." />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">All Folders</SelectItem>
-              {folders.sort((a,b) => a.name.localeCompare(b.name)).map(folder => (
+              <SelectItem value="all">All Folders & Assets</SelectItem>
+              {folders.filter(f => !f.parentId).sort((a,b) => a.name.localeCompare(b.name)).map(folder => ( // Only root folders in dropdown for simplicity
                 <SelectItem key={folder.id} value={folder.id}>{folder.name}</SelectItem>
               ))}
-              <SelectItem value="unfiled">Uncategorized</SelectItem>
+              <SelectItem value="unfiled">Uncategorized Assets</SelectItem>
             </SelectContent>
           </Select>
-          <div className="flex justify-start md:justify-end">
-            <Button 
-              variant={viewMode === 'list' ? "default" : "outline"} 
-              size="icon" 
-              onClick={() => setViewMode('list')} 
-              className="mr-2"
-              aria-label="List view"
-            >
-              <List className="h-5 w-5"/>
-            </Button>
-            <Button 
-              variant={viewMode === 'grid' ? "default" : "outline"} 
-              size="icon" 
-              onClick={() => setViewMode('grid')}
-              aria-label="Grid view"
-            >
-              <LayoutGrid className="h-5 w-5"/>
-            </Button>
-          </div>
         </div>
       </div>
       
-      {Object.entries(assetsByFolder).length === 0 && (
+      {folders.length === 0 && uncategorizedAssets.length === 0 && searchTerm === '' && (
         <div className="text-center py-10">
           <p className="text-xl text-muted-foreground font-semibold">No assets or folders found.</p>
-          <p className="text-muted-foreground">Try adjusting your filters or add a new item.</p>
+          <p className="text-muted-foreground">Try adding a new item.</p>
         </div>
       )}
 
-      {Object.entries(assetsByFolder)
-        .sort(([folderIdA, groupA], [folderIdB, groupB]) => { 
-            if (groupA.id === 'unfiled') return 1;
-            if (groupB.id === 'unfiled') return -1;
-            return groupA.name.localeCompare(groupB.name);
-        })
-        .map(([folderId, group]) => (
-        <div key={folderId} className="mb-8">
-          {selectedFolderFilter === 'all' && (
-            <div className="flex justify-between items-center mb-4 pb-2 border-b">
-              <h2 className="text-2xl font-headline font-semibold text-foreground">{group.name} ({group.assets.length})</h2>
-              {group.id !== 'unfiled' && folders.find(f=>f.id === group.id) && ( 
-                <div className="flex gap-2">
-                  <Button variant="ghost" size="icon" onClick={() => handleEditFolder(folders.find(f=>f.id === group.id)!)} aria-label="Edit folder">
-                    <Edit2 className="h-4 w-4 text-muted-foreground hover:text-primary" />
-                  </Button>
-                  <Button variant="ghost" size="icon" onClick={() => handleDeleteFolder(folders.find(f=>f.id === group.id)!)} aria-label="Delete folder">
-                    <Trash2 className="h-4 w-4 text-muted-foreground hover:text-destructive" />
-                  </Button>
-                </div>
-              )}
+      <div className="space-y-2">
+        {rootFolders.map(folder => {
+            if (!shouldDisplayFolder(folder) && selectedFolderFilter !== 'all') return null;
+             const assetsForThisFolderAndSubfolders = filteredAssets.filter(asset => {
+                if (!asset.folderId) return false;
+                if (selectedFolderFilter === 'all' || selectedFolderFilter === 'unfiled') {
+                     // Handled by getFolderAndSubFolderIds in filteredAssets if specific folder selected
+                    return asset.folderId === folder.id || folders.find(f => f.id === asset.folderId)?.parentId === folder.id; // Basic check
+                }
+                const folderIdsToMatch = getFolderAndSubFolderIds(selectedFolderFilter, folders);
+                return folderIdsToMatch.includes(asset.folderId || "");
+            });
+            const assetsDirectlyInFolder = filteredAssets.filter(a => a.folderId === folder.id);
+
+            if (selectedFolderFilter !== 'all' && selectedFolderFilter !== 'unfiled' && folder.id !== selectedFolderFilter && !getFolderAndSubFolderIds(selectedFolderFilter, folders).includes(folder.id) ) {
+                 // If filtering by a specific folder, only show that folder's tree or if this folder is an ancestor/descendant
+                 // This logic can be tricky. For now, let's ensure if specific folder is selected, we only show its branch.
+                 // This means we might need to adjust how rootFolders are iterated or how FolderTreeItem decides to render.
+                 // For now, if a folder is selected, and this is not it or its parent, don't render.
+                 // This is an approximation and might hide unrelated root folders.
+                 // A better way would be for FolderTreeItem to know if it's part of the selected branch.
+            }
+
+
+           return (
+            <FolderTreeItem
+              key={folder.id}
+              folder={folder}
+              allFolders={folders}
+              level={0}
+              assetsInFolder={assetsDirectlyInFolder}
+              onEditFolder={handleEditFolder}
+              onDeleteFolder={handleDeleteFolder}
+              onAssetDetailsClick={handleOpenAssetDetails}
+              initiallyOpen={selectedFolderFilter === folder.id || selectedFolderFilter === 'all'}
+            />
+           );
+        })}
+
+        {uncategorizedAssets.length > 0 && (selectedFolderFilter === 'all' || selectedFolderFilter === 'unfiled') && (
+          <div className="mt-4">
+            <div className="flex justify-between items-center mb-2 py-2 px-2 rounded-md">
+              <div className="flex items-center gap-2">
+                 <FolderIcon className="h-5 w-5 text-muted-foreground" />
+                <h2 className="font-headline font-medium text-lg text-muted-foreground">Uncategorized Assets ({uncategorizedAssets.length})</h2>
+              </div>
             </div>
-          )}
-          {group.assets.length > 0 ? (
-            viewMode === 'grid' ? (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-                {group.assets.map(asset => (
-                  <AssetCard key={asset.id} asset={asset} onDetailsClick={handleOpenAssetDetails} />
-                ))}
-              </div>
-            ) : (
-              <div className="space-y-3 border rounded-lg p-3">
-                {group.assets.map(asset => (
-                  <AssetListItem key={asset.id} asset={asset} onDetailsClick={handleOpenAssetDetails} />
-                ))}
-              </div>
-            )
-          ) : (
-             (selectedFolderFilter !== 'all' || group.id === 'unfiled') && ( 
-              <div className="text-center py-6 border rounded-lg p-3">
-                <p className="text-lg text-muted-foreground">
-                  {selectedFolderFilter === 'all' && group.id === 'unfiled' && searchTerm === '' ? 'No uncategorized assets.' : 
-                   `No assets in ${group.name.toLowerCase()} matching your search.`}
-                </p>
-              </div>
-             )
-          )}
-           {selectedFolderFilter === 'all' && group.assets.length === 0 && group.id !== 'unfiled' && (
-             <div className="text-sm text-center py-4 text-muted-foreground border rounded-lg p-3">This folder is empty.</div>
-           )}
-        </div>
-      ))}
+            <div className="space-y-1.5 pl-4 ml-[7px] border-l-2 border-transparent"> {/* Align with folder content */}
+              {uncategorizedAssets.map(asset => (
+                <AssetListItem key={asset.id} asset={asset} onDetailsClick={handleOpenAssetDetails} />
+              ))}
+            </div>
+          </div>
+        )}
+        
+        {filteredAssets.length === 0 && searchTerm !== '' && (
+            <div className="text-center py-10">
+            <p className="text-lg text-muted-foreground">No assets found matching your search term "{searchTerm}".</p>
+            </div>
+        )}
+
+      </div>
+
 
       {selectedAssetForDetails && (
         <AssetDetailsDialog
@@ -337,13 +403,11 @@ export default function AllAssetsPage() { // Renamed component for clarity
         />
       )}
 
-      {/* Asset Connection Wizard Dialog */}
       {isAssetWizardOpen && (
         <Dialog open={isAssetWizardOpen} onOpenChange={setIsAssetWizardOpen}>
           <DialogContent className="sm:max-w-2xl p-0">
             <AssetConnectionWizard 
               onSaveComplete={handleAssetWizardSave}
-              // onCancel={() => setIsAssetWizardOpen(false)} // onOpenChange handles this
             />
           </DialogContent>
         </Dialog>
