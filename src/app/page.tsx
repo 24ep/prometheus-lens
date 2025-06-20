@@ -29,7 +29,8 @@ interface FolderTreeItemProps {
   folder: AssetFolder;
   allFolders: AssetFolder[];
   level: number;
-  assetsInFolder: Asset[];
+  assetsInFolder: Asset[]; // Assets for THIS folder instance
+  originalFilteredAssets: Asset[]; // The complete list of assets filtered by global filters
   onEditFolder: (folder: AssetFolder) => void;
   onDeleteFolder: (folder: AssetFolder) => void;
   onAssetDetailsClick: (asset: Asset) => void;
@@ -41,6 +42,7 @@ const FolderTreeItem: React.FC<FolderTreeItemProps> = ({
   allFolders,
   level,
   assetsInFolder,
+  originalFilteredAssets,
   onEditFolder,
   onDeleteFolder,
   onAssetDetailsClick,
@@ -51,7 +53,6 @@ const FolderTreeItem: React.FC<FolderTreeItemProps> = ({
 
   const hasContent = assetsInFolder.length > 0 || childFolders.length > 0;
 
-  // Update isOpen if initiallyOpen prop changes (e.g. due to filter selection)
   useEffect(() => {
     setIsOpen(initiallyOpen);
   }, [initiallyOpen]);
@@ -91,12 +92,13 @@ const FolderTreeItem: React.FC<FolderTreeItemProps> = ({
               key={child.id}
               folder={child}
               allFolders={allFolders}
-              level={0} 
-              assetsInFolder={filteredAssets.filter(a => a.folderId === child.id)}
+              level={level + 1} // Corrected level
+              assetsInFolder={originalFilteredAssets.filter(a => a.folderId === child.id)} // Calculate for child
+              originalFilteredAssets={originalFilteredAssets} // Pass down the full list
               onEditFolder={onEditFolder}
               onDeleteFolder={onDeleteFolder}
               onAssetDetailsClick={onAssetDetailsClick}
-              initiallyOpen={false} // Child folders open based on their own state or interaction
+              initiallyOpen={false}
             />
           ))}
           {assetsInFolder.length > 0 && (
@@ -106,7 +108,7 @@ const FolderTreeItem: React.FC<FolderTreeItemProps> = ({
               ))}
             </div>
           )}
-           {assetsInFolder.length === 0 && childFolders.length === 0 && hasContent && ( // Only show if folder was supposed to have content but is now empty due to filters
+           {assetsInFolder.length === 0 && childFolders.length === 0 && hasContent && ( 
              <p className="text-xs text-muted-foreground py-1 px-2 italic">No items match current filters in this folder.</p>
            )}
            {!hasContent && (
@@ -316,7 +318,6 @@ export default function AllAssetsPage() {
       <div className="space-y-1"> {/* Reduced space-y for tighter tree */}
         {rootFolders.map(folder => {
            if (selectedFolderFilter !== 'all' && selectedFolderFilter !== 'unfiled' && !isFolderOrDescendantSelected(folder.id, selectedFolderFilter, folders) && !folders.find(f => f.id === selectedFolderFilter)?.parentId === folder.id) {
-             // If a specific folder filter is active, only show the branch containing that folder or if it's a direct child for context
              let show = false;
              let current = folders.find(f => f.id === selectedFolderFilter);
              while(current) {
@@ -338,6 +339,7 @@ export default function AllAssetsPage() {
               allFolders={folders}
               level={0}
               assetsInFolder={assetsDirectlyInFolder}
+              originalFilteredAssets={filteredAssets}
               onEditFolder={handleEditFolder}
               onDeleteFolder={handleDeleteFolder}
               onAssetDetailsClick={handleOpenAssetDetails}
