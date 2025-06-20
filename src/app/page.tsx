@@ -9,7 +9,7 @@ import type { Asset, AssetFolder } from '@/types';
 import { Button } from '@/components/ui/button';
 // Link removed as direct navigation to new asset page from here is replaced by dialog
 // import Link from 'next/link'; 
-import { useRouter } from 'next/navigation';
+// import { useRouter } from 'next/navigation'; // Potentially not needed if wizard handles itself or through callbacks
 import { PlusCircle, Filter, LayoutGrid, List, Edit2, Trash2 } from 'lucide-react'; // FolderPlus, PackagePlus removed
 import {
   Select,
@@ -25,13 +25,15 @@ import { CreateItemTypeDialog } from '@/components/folders/create-item-type-dial
 import { ManageFolderDialog } from '@/components/folders/manage-folder-dialog';
 import { ConfirmDialog } from '@/components/common/confirm-dialog';
 import { useToast } from '@/hooks/use-toast';
+import { Dialog, DialogContent } from '@/components/ui/dialog'; // Import Dialog components
+import { AssetConnectionWizard } from '@/components/assets/asset-connection-wizard'; // Import the wizard
 
 export default function DashboardPage() {
-  const router = useRouter();
+  // const router = useRouter(); // May not be needed
   const { toast } = useToast();
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedFolderFilter, setSelectedFolderFilter] = useState<string | 'all'>('all');
-  const [viewMode, setViewMode] = useState<'list' | 'grid'>('list'); // Default to 'list'
+  const [viewMode, setViewMode] = useState<'list' | 'grid'>('list');
   
   const [assets, setAssets] = useState<Asset[]>([]);
   const [folders, setFolders] = useState<AssetFolder[]>([]);
@@ -45,9 +47,9 @@ export default function DashboardPage() {
   const [isConfirmDeleteFolderDialogOpen, setIsConfirmDeleteFolderDialogOpen] = useState(false);
   const [folderToDelete, setFolderToDelete] = useState<AssetFolder | null>(null);
 
-  // Function to refresh data from mock source
+  const [isAssetWizardOpen, setIsAssetWizardOpen] = useState(false); // State for wizard dialog
+
   const refreshData = () => {
-    // Create new arrays to ensure re-render if underlying mockData instances change
     setAssets([...mockAssetsData]);
     setFolders([...mockFoldersData]);
   };
@@ -69,8 +71,6 @@ export default function DashboardPage() {
 
   const assetsByFolder = useMemo(() => {
     const grouped: Record<string, { name: string; id: string; assets: Asset[] }> = {};
-    
-    // Create a map for quick folder name lookup
     const folderMap = new Map(folders.map(f => [f.id, f.name]));
 
     filteredAssets.forEach(asset => {
@@ -88,11 +88,10 @@ export default function DashboardPage() {
           grouped[folder.id] = { name: folder.name, id: folder.id, assets: [] };
         }
       });
-      if (!grouped['unfiled'] && assets.some(a => !a.folderId)) { // Only add 'Uncategorized' if there are unfiled assets
+      if (!grouped['unfiled'] && assets.some(a => !a.folderId)) {
          grouped['unfiled'] = { name: 'Uncategorized', id: 'unfiled', assets: [] };
       }
     } else if (selectedFolderFilter !== 'unfiled' && !grouped[selectedFolderFilter] && folders.some(f => f.id === selectedFolderFilter)) {
-      // If a specific folder is selected but has no matching assets, still show the folder group (empty)
       grouped[selectedFolderFilter] = { name: folderMap.get(selectedFolderFilter) || 'Unknown Folder', id: selectedFolderFilter, assets: [] };
     } else if (selectedFolderFilter === 'unfiled' && !grouped['unfiled']) {
        grouped['unfiled'] = { name: 'Uncategorized', id: 'unfiled', assets: [] };
@@ -112,9 +111,8 @@ export default function DashboardPage() {
     if (updatedAsset) {
       setAssets(prevAssets => prevAssets.map(a => a.id === assetId ? updatedAsset : a));
       if (selectedAssetForDetails && selectedAssetForDetails.id === assetId) {
-        setSelectedAssetForDetails(updatedAsset); // Update details in dialog if it's the same asset
+        setSelectedAssetForDetails(updatedAsset); 
       }
-      // Toast is handled within AssetDetailsDialog now
     }
   };
 
@@ -123,18 +121,25 @@ export default function DashboardPage() {
     if (selectedAssetForDetails && selectedAssetForDetails.id === updatedAsset.id) {
       setSelectedAssetForDetails(updatedAsset);
     }
-    // Toast is handled within EditAssetConfigurationDialog
   };
-
 
   const handleCreateItemTypeSelection = (type: 'asset' | 'folder') => {
     setIsCreateItemTypeDialogOpen(false);
     if (type === 'asset') {
-      router.push('/assets/new');
+      setIsAssetWizardOpen(true); // Open wizard dialog
     } else {
       setFolderToEdit(null); 
       setIsManageFolderDialogOpen(true);
     }
+  };
+
+  const handleAssetWizardSave = (savedAsset: Asset) => {
+    refreshData(); // Or more specific update if needed
+    setIsAssetWizardOpen(false);
+    toast({
+      title: "Asset Added!",
+      description: `Asset "${savedAsset.name}" of type "${savedAsset.type}" has been configured.`,
+    });
   };
   
   const handleSaveFolder = (folderData: { id?: string; name: string; parentId?: string }) => {
@@ -151,7 +156,7 @@ export default function DashboardPage() {
     }
     setIsManageFolderDialogOpen(false);
     setFolderToEdit(null);
-    refreshData(); // Re-fetch to ensure folder list in select is updated
+    refreshData(); 
   };
 
   const handleEditFolder = (folder: AssetFolder) => {
@@ -169,9 +174,9 @@ export default function DashboardPage() {
       const success = deleteFolder(folderToDelete.id);
       if (success) {
         toast({ title: "Folder Deleted", description: `Folder "${folderToDelete.name}" removed.`});
-        refreshData(); // Refresh all data
+        refreshData(); 
         if (selectedFolderFilter === folderToDelete.id) {
-          setSelectedFolderFilter('all'); // Reset filter if deleted folder was selected
+          setSelectedFolderFilter('all'); 
         }
       } else {
         toast({ title: "Error", description: "Could not delete folder. It might not exist or have dependencies.", variant: "destructive"});
@@ -246,7 +251,7 @@ export default function DashboardPage() {
       )}
 
       {Object.entries(assetsByFolder)
-        .sort(([folderIdA, groupA], [folderIdB, groupB]) => { // Sort folders by name, Uncategorized last
+        .sort(([folderIdA, groupA], [folderIdB, groupB]) => { 
             if (groupA.id === 'unfiled') return 1;
             if (groupB.id === 'unfiled') return -1;
             return groupA.name.localeCompare(groupB.name);
@@ -256,7 +261,7 @@ export default function DashboardPage() {
           {selectedFolderFilter === 'all' && (
             <div className="flex justify-between items-center mb-4 pb-2 border-b">
               <h2 className="text-2xl font-headline font-semibold text-foreground">{group.name} ({group.assets.length})</h2>
-              {group.id !== 'unfiled' && folders.find(f=>f.id === group.id) && ( // Ensure folder exists before showing edit/delete
+              {group.id !== 'unfiled' && folders.find(f=>f.id === group.id) && ( 
                 <div className="flex gap-2">
                   <Button variant="ghost" size="icon" onClick={() => handleEditFolder(folders.find(f=>f.id === group.id)!)} aria-label="Edit folder">
                     <Edit2 className="h-4 w-4 text-muted-foreground hover:text-primary" />
@@ -331,6 +336,18 @@ export default function DashboardPage() {
           title={`Delete Folder: ${folderToDelete.name}`}
           description="Are you sure you want to delete this folder? Assets in this folder will become uncategorized. This action cannot be undone."
         />
+      )}
+
+      {/* Asset Connection Wizard Dialog */}
+      {isAssetWizardOpen && (
+        <Dialog open={isAssetWizardOpen} onOpenChange={setIsAssetWizardOpen}>
+          <DialogContent className="sm:max-w-2xl p-0">
+            <AssetConnectionWizard 
+              onSaveComplete={handleAssetWizardSave}
+              // onCancel={() => setIsAssetWizardOpen(false)} // onOpenChange handles this
+            />
+          </DialogContent>
+        </Dialog>
       )}
 
     </AppLayout>

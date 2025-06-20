@@ -1,3 +1,4 @@
+
 "use client";
 
 import Link from 'next/link';
@@ -20,7 +21,7 @@ import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
   LayoutDashboard,
-  PlusCircle,
+  // PlusCircle, // Icon removed as "New Asset" link is removed
   Settings,
   Users,
   FolderKanban,
@@ -28,12 +29,12 @@ import {
   Moon,
   Sun,
 } from 'lucide-react';
-import { useTheme } from 'next-themes'; // Assuming next-themes is or will be installed for theme toggling
+// import { useTheme } from 'next-themes'; // Assuming next-themes is or will be installed for theme toggling
 import React from 'react';
 
 const navItems = [
   { href: '/', label: 'Dashboard', icon: LayoutDashboard },
-  { href: '/assets/new', label: 'New Asset', icon: PlusCircle },
+  // { href: '/assets/new', label: 'New Asset', icon: PlusCircle }, // Removed: New Asset is now a dialog on dashboard
   { href: '/assets', label: 'All Assets', icon: FolderKanban, disabled: true }, // Placeholder
   { type: 'separator' as const },
   { href: '/settings/users', label: 'Users & Groups', icon: Users, disabled: true }, // Placeholder
@@ -64,19 +65,21 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
               item.type === 'separator' ? (
                 <SidebarSeparator key={`sep-${index}`} className="my-2" />
               ) : (
-                <SidebarMenuItem key={item.href}>
-                  <Link href={item.href}>
-                    <SidebarMenuButton
-                      isActive={pathname === item.href}
-                      disabled={item.disabled}
-                      tooltip={item.label}
-                      aria-label={item.label}
-                    >
-                      <item.icon />
-                      <span>{item.label}</span>
-                    </SidebarMenuButton>
-                  </Link>
-                </SidebarMenuItem>
+                item.href && ( // Ensure item.href exists before creating a link
+                  <SidebarMenuItem key={item.href}>
+                    <Link href={item.href}>
+                      <SidebarMenuButton
+                        isActive={pathname === item.href}
+                        disabled={item.disabled}
+                        tooltip={item.label}
+                        aria-label={item.label}
+                      >
+                        <item.icon />
+                        <span>{item.label}</span>
+                      </SidebarMenuButton>
+                    </Link>
+                  </SidebarMenuItem>
+                )
               )
             )}
           </SidebarMenu>

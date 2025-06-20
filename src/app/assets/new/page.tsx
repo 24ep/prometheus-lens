@@ -1,12 +1,4 @@
-import { AppLayout } from '@/components/layout/app-layout';
-import { AssetConnectionWizard } from '@/components/assets/asset-connection-wizard';
 
-export default function NewAssetPage() {
-  return (
-    <AppLayout>
-      <div className="container mx-auto py-4">
-        <AssetConnectionWizard />
-      </div>
-    </AppLayout>
-  );
-}
+// This file is no longer needed as the Asset Connection Wizard is now a dialog.
+// It can be safely deleted.
+// If a route to /assets/new is still hit, Next.js will show a 404.
