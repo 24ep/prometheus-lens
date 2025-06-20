@@ -26,14 +26,16 @@ export function ManageFolderDialog({ isOpen, onOpenChange, onSave, existingFolde
 
 
   useEffect(() => {
-    if (existingFolder) {
-      setFolderName(existingFolder.name);
-      setParentId(existingFolder.parentId);
-    } else {
-      setFolderName('');
-      setParentId(undefined);
+    if (isOpen) { // Only reset/set when dialog becomes visible or existingFolder changes
+      if (existingFolder) {
+        setFolderName(existingFolder.name);
+        setParentId(existingFolder.parentId);
+      } else {
+        setFolderName('');
+        setParentId(undefined);
+      }
     }
-  }, [existingFolder, isOpen]); // Reset form when dialog opens or existingFolder changes
+  }, [existingFolder, isOpen]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -41,15 +43,44 @@ export function ManageFolderDialog({ isOpen, onOpenChange, onSave, existingFolde
       toast({ title: "Validation Error", description: "Folder name cannot be empty.", variant: "destructive" });
       return;
     }
+    // Prevent circular dependency for parentId
+    if (existingFolder && parentId === existingFolder.id) {
+        toast({ title: "Validation Error", description: "A folder cannot be its own parent.", variant: "destructive" });
+        return;
+    }
+
+    // Check for potential deeper circular dependencies (simplified check)
+    let currentParent = parentId;
+    const visited = new Set<string>();
+    if (existingFolder) visited.add(existingFolder.id);
+
+    while(currentParent) {
+        if (visited.has(currentParent)) {
+            toast({ title: "Validation Error", description: "Circular parent folder dependency detected.", variant: "destructive" });
+            return;
+        }
+        visited.add(currentParent);
+        const parentFolder = allFolders.find(f => f.id === currentParent);
+        currentParent = parentFolder?.parentId;
+    }
+
+
     onSave({
       id: existingFolder?.id,
       name: folderName,
       parentId: parentId === NO_PARENT_VALUE ? undefined : parentId,
     });
+    onOpenChange(false); // Close dialog after saving
   };
 
   return (
-    <Dialog open={isOpen} onOpenChange={onOpenChange}>
+    <Dialog open={isOpen} onOpenChange={(open) => {
+        if (!open) { // Reset form if dialog is closed by clicking outside or Esc
+            setFolderName(existingFolder?.name || '');
+            setParentId(existingFolder?.parentId);
+        }
+        onOpenChange(open);
+    }}>
       <DialogContent className="sm:max-w-md">
         <form onSubmit={handleSubmit}>
           <DialogHeader>
@@ -63,9 +94,9 @@ export function ManageFolderDialog({ isOpen, onOpenChange, onSave, existingFolde
           
           <div className="py-4 space-y-4">
             <div>
-              <Label htmlFor="folderName">Folder Name</Label>
+              <Label htmlFor="folderNameDialog">Folder Name</Label> {/* Changed id to avoid conflict */}
               <Input 
-                id="folderName" 
+                id="folderNameDialog" 
                 value={folderName} 
                 onChange={(e) => setFolderName(e.target.value)} 
                 placeholder="e.g., Production Databases"
@@ -73,18 +104,20 @@ export function ManageFolderDialog({ isOpen, onOpenChange, onSave, existingFolde
               />
             </div>
             <div>
-              <Label htmlFor="parentId">Parent Folder (Optional)</Label>
+              <Label htmlFor="parentIdDialog">Parent Folder (Optional)</Label> {/* Changed id */}
               <Select
-                value={parentId === undefined ? "" : parentId}
+                value={parentId || NO_PARENT_VALUE} // Ensure NO_PARENT_VALUE is used if parentId is undefined
                 onValueChange={(value) => setParentId(value === NO_PARENT_VALUE ? undefined : value)}
               >
-                <SelectTrigger id="parentId">
+                <SelectTrigger id="parentIdDialog">
                   <SelectValue placeholder="Select parent folder" />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value={NO_PARENT_VALUE}>None (Root Level)</SelectItem>
                   {allFolders
                     .filter(folder => folder.id !== existingFolder?.id) // Cannot be its own parent
+                    // Add more sophisticated check to prevent circular dependencies if nesting is deep
+                    .sort((a,b) => a.name.localeCompare(b.name))
                     .map(folder => (
                     <SelectItem key={folder.id} value={folder.id}>{folder.name}</SelectItem>
                   ))}
@@ -104,3 +137,4 @@ export function ManageFolderDialog({ isOpen, onOpenChange, onSave, existingFolde
     </Dialog>
   );
 }
+

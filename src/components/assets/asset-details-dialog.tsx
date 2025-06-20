@@ -1,46 +1,60 @@
 
 "use client";
 
-import type { Asset } from '@/types';
-import { mockAssetsData } from '@/lib/mock-data'; // For metadata, can be removed if not needed
+import type { Asset, AssetFolder } from '@/types';
+import { mockFoldersData, updateAssetConfiguration } from '@/lib/mock-data';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter, DialogClose } from '@/components/ui/dialog';
-import { Edit, ExternalLink, X, PlusCircle } from 'lucide-react';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { ExternalLink, X, PlusCircle, Edit, Settings2, Info, Tag, ListChecks, FileText } from 'lucide-react';
 import React, { useState, useEffect } from 'react';
 import { useToast } from '@/hooks/use-toast';
+import { getMockInstructions } from '@/lib/asset-utils';
+import { EditAssetConfigurationDialog } from './edit-asset-configuration-dialog'; // Import the new dialog
+import { cn } from '@/lib/utils';
 
 interface AssetDetailsDialogProps {
   asset: Asset | null;
+  allFolders: AssetFolder[]; // Pass all folders for name lookup
   isOpen: boolean;
   onOpenChange: (isOpen: boolean) => void;
   onSaveTags: (assetId: string, tags: string[]) => void;
+  onConfigurationSave: (updatedAsset: Asset) => void; // Callback when configuration is saved
 }
 
-export function AssetDetailsDialog({ asset, isOpen, onOpenChange, onSaveTags }: AssetDetailsDialogProps) {
+export function AssetDetailsDialog({ asset, allFolders, isOpen, onOpenChange, onSaveTags, onConfigurationSave }: AssetDetailsDialogProps) {
   const { toast } = useToast();
   const [currentTags, setCurrentTags] = useState<string[]>([]);
   const [tagInput, setTagInput] = useState('');
+  const [isEditConfigOpen, setIsEditConfigOpen] = useState(false);
+  const [currentAssetForEdit, setCurrentAssetForEdit] = useState<Asset | null>(null);
 
   useEffect(() => {
-    if (asset?.tags) {
-      setCurrentTags([...asset.tags]);
+    if (asset) {
+      setCurrentAssetForEdit(asset); // Keep a local copy for the edit dialog
+      setCurrentTags(asset.tags ? [...asset.tags] : []);
     } else {
       setCurrentTags([]);
+      setCurrentAssetForEdit(null);
     }
-  }, [asset]);
+    // Reset tag input when dialog opens or asset changes
+    setTagInput('');
+  }, [asset, isOpen]);
 
   if (!asset) return null;
 
+  const instructionSteps = getMockInstructions(asset.type);
+  const folderName = asset.folderId ? allFolders.find(f => f.id === asset.folderId)?.name : 'N/A';
+
   const handleAddTag = () => {
     if (tagInput.trim() === '') return;
-    const newTags = tagInput.split(',').map(t => t.trim()).filter(t => t !== '');
-    const uniqueNewTags = newTags.filter(t => !currentTags.includes(t));
-    if (uniqueNewTags.length > 0) {
-      setCurrentTags(prev => [...prev, ...uniqueNewTags]);
+    const newTags = tagInput.split(',').map(t => t.trim()).filter(t => t !== '' && !currentTags.includes(t));
+    if (newTags.length > 0) {
+      setCurrentTags(prev => [...prev, ...newTags].sort());
     }
     setTagInput('');
   };
@@ -49,102 +63,180 @@ export function AssetDetailsDialog({ asset, isOpen, onOpenChange, onSaveTags }: 
     setCurrentTags(prev => prev.filter(tag => tag !== tagToRemove));
   };
 
-  const handleSaveChanges = () => {
+  const handleSaveTagsLocal = () => {
     onSaveTags(asset.id, currentTags);
-    onOpenChange(false); // Close dialog after saving
+    // No need to close dialog, user might want to do other things
+    toast({ title: "Tags Updated", description: `Tags for ${asset.name} saved.` });
   };
 
+  const handleOpenEditConfig = () => {
+    setIsEditConfigOpen(true);
+  };
+  
+  const handleSaveConfiguration = (assetId: string, newConfiguration: Record<string, any>) => {
+    const updatedAsset = updateAssetConfiguration(assetId, newConfiguration);
+    if (updatedAsset) {
+      setCurrentAssetForEdit(updatedAsset); // Update local state for dialog
+      onConfigurationSave(updatedAsset); // Propagate to parent
+      toast({ title: "Configuration Saved", description: `Configuration for ${updatedAsset.name} has been updated.` });
+    } else {
+      toast({ title: "Error", description: "Failed to save configuration.", variant: "destructive" });
+    }
+    setIsEditConfigOpen(false);
+  };
 
   return (
-    <Dialog open={isOpen} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-3xl p-0">
-        <DialogHeader className="p-6 pb-4 border-b">
-          <div className="flex flex-col sm:flex-row justify-between items-start gap-2">
-            <div>
-              <DialogTitle className="font-headline text-2xl">{asset.name}</DialogTitle>
-              <DialogDescription className="text-base">{asset.type} Asset Details</DialogDescription>
-            </div>
-            <div className="flex gap-2 mt-2 sm:mt-0">
-              <Button variant="outline" size="sm" disabled><Edit className="mr-2 h-4 w-4" />Edit Configuration</Button>
-              {asset.grafanaLink && (
-                <a href={asset.grafanaLink} target="_blank" rel="noopener noreferrer">
-                  <Button size="sm"><ExternalLink className="mr-2 h-4 w-4" />Open in Grafana</Button>
-                </a>
-              )}
-            </div>
-          </div>
-        </DialogHeader>
-
-        <ScrollArea className="max-h-[calc(80vh-180px)]">
-          <div className="p-6 grid grid-cols-1 md:grid-cols-3 gap-6">
-            <div className="md:col-span-2 space-y-6">
-              <div className="p-4 rounded-lg border bg-card/50">
-                  <h3 className="font-headline text-lg mb-2">Connection Status</h3>
-                  <p>Status: <Badge variant={asset.status === 'connected' ? 'default' : asset.status === 'error' ? 'destructive' : 'secondary'} className="capitalize">{asset.status}</Badge></p>
-                  <p className="mt-1 text-sm text-muted-foreground">Last Checked: {new Date(asset.lastChecked).toLocaleString()}</p>
+    <>
+      <Dialog open={isOpen} onOpenChange={onOpenChange}>
+        <DialogContent className="sm:max-w-3xl p-0 h-[85vh] flex flex-col">
+          <DialogHeader className="p-6 pb-4 border-b">
+            <div className="flex flex-col sm:flex-row justify-between items-start gap-2">
+              <div>
+                <DialogTitle className="font-headline text-2xl">{asset.name}</DialogTitle>
+                <DialogDescription className="text-base">{asset.type} Asset</DialogDescription>
               </div>
-              <div className="p-4 rounded-lg border bg-card/50">
-                  <h3 className="font-headline text-lg mb-2">Prometheus Configuration</h3>
-                  <ScrollArea className="h-48 w-full rounded-md border p-3 bg-muted/20">
-                      <pre className="text-xs font-code whitespace-pre-wrap">
-                          {JSON.stringify({ scrape_configs: [asset.configuration] }, null, 2)}
-                      </pre>
-                  </ScrollArea>
+              <div className="flex gap-2 mt-2 sm:mt-0">
+                {asset.grafanaLink && (
+                  <a href={asset.grafanaLink} target="_blank" rel="noopener noreferrer">
+                    <Button size="sm"><ExternalLink className="mr-2 h-4 w-4" />Open in Grafana</Button>
+                  </a>
+                )}
+                 {!asset.grafanaLink && (
+                    <Button size="sm" disabled><ExternalLink className="mr-2 h-4 w-4" />Grafana N/A</Button>
+                 )}
               </div>
             </div>
+          </DialogHeader>
 
-            <div className="space-y-6">
-              <div className="p-4 rounded-lg border bg-card/50">
-                <h3 className="font-headline text-lg mb-3">Metadata</h3>
-                <div className="space-y-1.5 text-sm">
-                    <p><strong>ID:</strong> <span className="text-muted-foreground">{asset.id}</span></p>
-                    <p><strong>Type:</strong> <span className="text-muted-foreground">{asset.type}</span></p>
-                    {asset.folderId && <p><strong>Folder:</strong> <span className="text-muted-foreground">{mockAssetsData.find(f => f.id === asset.folderId)?.name || asset.folderId}</span></p>}
+          <Tabs defaultValue="overview" orientation="vertical" className="flex-grow flex overflow-hidden p-6 pt-2 gap-6">
+            <TabsList className="flex flex-col h-full w-1/4 justify-start items-stretch bg-muted/50 p-2 rounded-lg space-y-1">
+              <TabsTrigger value="overview" className="justify-start px-3 py-2 text-sm data-[state=active]:bg-background data-[state=active]:shadow-sm">
+                <Info className="mr-2 h-4 w-4" /> Overview
+              </TabsTrigger>
+              <TabsTrigger value="configuration" className="justify-start px-3 py-2 text-sm data-[state=active]:bg-background data-[state=active]:shadow-sm">
+                <Settings2 className="mr-2 h-4 w-4" /> Configuration
+              </TabsTrigger>
+              <TabsTrigger value="metadata" className="justify-start px-3 py-2 text-sm data-[state=active]:bg-background data-[state=active]:shadow-sm">
+                <ListChecks className="mr-2 h-4 w-4" /> Metadata
+              </TabsTrigger>
+              <TabsTrigger value="tags" className="justify-start px-3 py-2 text-sm data-[state=active]:bg-background data-[state=active]:shadow-sm">
+                <Tag className="mr-2 h-4 w-4" /> Tags
+              </TabsTrigger>
+              <TabsTrigger value="instructions" className="justify-start px-3 py-2 text-sm data-[state=active]:bg-background data-[state=active]:shadow-sm">
+                <FileText className="mr-2 h-4 w-4" /> Instructions
+              </TabsTrigger>
+            </TabsList>
+
+            <ScrollArea className="w-3/4 pr-2">
+              <TabsContent value="overview" className="mt-0 space-y-4">
+                <div className="p-4 rounded-lg border bg-card/50">
+                    <h3 className="font-headline text-lg mb-2">Connection Status</h3>
+                    <p>Status: <Badge variant={currentAssetForEdit?.status === 'connected' ? 'default' : currentAssetForEdit?.status === 'error' ? 'destructive' : 'secondary'} className="capitalize">{currentAssetForEdit?.status}</Badge></p>
+                    <p className="mt-1 text-sm text-muted-foreground">Last Checked: {currentAssetForEdit && new Date(currentAssetForEdit.lastChecked).toLocaleString()}</p>
                 </div>
-              </div>
-
-              <div className="p-4 rounded-lg border bg-card/50">
-                <h3 className="font-headline text-lg mb-2">Tags</h3>
-                <div className="mb-3 flex flex-wrap gap-1.5">
-                  {currentTags.length > 0 ? currentTags.map(tag => (
-                    <Badge key={tag} variant="secondary" className="group text-xs pr-1.5">
-                      {tag}
-                      <button onClick={() => handleRemoveTag(tag)} className="ml-1 opacity-50 group-hover:opacity-100 focus:opacity-100" aria-label={`Remove tag ${tag}`}>
-                        <X className="h-3 w-3" />
-                      </button>
-                    </Badge>
-                  )) : <p className="text-xs text-muted-foreground italic">No tags assigned.</p>}
+                 <div className="p-4 rounded-lg border bg-card/50">
+                    <h3 className="font-headline text-lg mb-2">Key Metrics (Placeholder)</h3>
+                    <p className="text-sm text-muted-foreground">Key performance indicators and metrics for this asset would appear here.</p>
+                    {/* Example placeholder:
+                    <p>CPU Usage: <strong>35%</strong></p>
+                    <p>Memory Usage: <strong>60%</strong></p>
+                    <p>Disk I/O: <strong>150 ops/sec</strong></p>
+                    */}
                 </div>
-                <div className="flex gap-2 items-center">
-                  <Input 
-                    type="text" 
-                    value={tagInput} 
-                    onChange={(e) => setTagInput(e.target.value)}
-                    placeholder="Add tag(s), comma-separated"
-                    className="h-8 text-xs"
-                    onKeyDown={(e) => { if (e.key === 'Enter') { handleAddTag(); e.preventDefault();}}}
-                  />
-                  <Button type="button" size="icon" variant="outline" className="h-8 w-8 shrink-0" onClick={handleAddTag} aria-label="Add tags">
-                    <PlusCircle className="h-4 w-4" />
-                  </Button>
-                </div>
-                 <p className="text-xs text-muted-foreground mt-1.5">Press Enter or click '+' to add.</p>
-              </div>
+              </TabsContent>
 
-              <div className="p-4 rounded-lg border bg-card/50">
-                  <h3 className="font-headline text-lg mb-2">Instructions</h3>
-                  <p className="text-sm text-muted-foreground">Specific connection/troubleshooting instructions for '{asset.type}' assets would appear here.</p>
-              </div>
-            </div>
-          </div>
-        </ScrollArea>
-        <DialogFooter className="p-6 pt-4 border-t">
-          <DialogClose asChild>
-            <Button type="button" variant="outline">Cancel</Button>
-          </DialogClose>
-          <Button type="button" onClick={handleSaveChanges}>Save Changes</Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+              <TabsContent value="configuration" className="mt-0 space-y-4">
+                <div className="p-4 rounded-lg border bg-card/50">
+                    <div className="flex justify-between items-center mb-2">
+                        <h3 className="font-headline text-lg">Prometheus Configuration</h3>
+                        <Button variant="outline" size="sm" onClick={handleOpenEditConfig}>
+                            <Edit className="mr-2 h-4 w-4"/>Edit Configuration
+                        </Button>
+                    </div>
+                    <ScrollArea className="h-60 w-full rounded-md border p-3 bg-muted/20">
+                        <pre className="text-xs font-code whitespace-pre-wrap">
+                            {currentAssetForEdit && JSON.stringify({ scrape_configs: [currentAssetForEdit.configuration] }, null, 2)}
+                        </pre>
+                    </ScrollArea>
+                </div>
+              </TabsContent>
+
+              <TabsContent value="metadata" className="mt-0 space-y-4">
+                 <div className="p-4 rounded-lg border bg-card/50">
+                    <h3 className="font-headline text-lg mb-3">Details</h3>
+                    <div className="space-y-1.5 text-sm">
+                        <p><strong>ID:</strong> <span className="text-muted-foreground">{asset.id}</span></p>
+                        <p><strong>Type:</strong> <span className="text-muted-foreground">{asset.type}</span></p>
+                        <p><strong>Folder:</strong> <span className="text-muted-foreground">{folderName || 'Uncategorized'}</span></p>
+                    </div>
+                </div>
+              </TabsContent>
+
+              <TabsContent value="tags" className="mt-0 space-y-4">
+                <div className="p-4 rounded-lg border bg-card/50">
+                  <h3 className="font-headline text-lg mb-2">Manage Tags</h3>
+                  <div className="mb-3 flex flex-wrap gap-1.5">
+                    {currentTags.length > 0 ? currentTags.map(tag => (
+                      <Badge key={tag} variant="secondary" className="group text-xs pr-1.5">
+                        {tag}
+                        <button onClick={() => handleRemoveTag(tag)} className="ml-1 opacity-50 group-hover:opacity-100 focus:opacity-100" aria-label={`Remove tag ${tag}`}>
+                          <X className="h-3 w-3" />
+                        </button>
+                      </Badge>
+                    )) : <p className="text-xs text-muted-foreground italic">No tags assigned.</p>}
+                  </div>
+                  <div className="flex gap-2 items-center">
+                    <Input 
+                      type="text" 
+                      value={tagInput} 
+                      onChange={(e) => setTagInput(e.target.value)}
+                      placeholder="Add tag(s), comma-separated"
+                      className="h-9 text-sm"
+                      onKeyDown={(e) => { if (e.key === 'Enter') { handleAddTag(); e.preventDefault();}}}
+                    />
+                    <Button type="button" size="icon" variant="outline" className="h-9 w-9 shrink-0" onClick={handleAddTag} aria-label="Add tags">
+                      <PlusCircle className="h-4 w-4" />
+                    </Button>
+                  </div>
+                  <p className="text-xs text-muted-foreground mt-1.5">Press Enter or click '+' to add. Click 'Save Tags' below to persist changes.</p>
+                </div>
+              </TabsContent>
+
+              <TabsContent value="instructions" className="mt-0 space-y-4">
+                <div className="p-4 rounded-lg border bg-card/50">
+                  <h3 className="font-headline text-lg mb-2">Connection Instructions</h3>
+                  {instructionSteps.length > 0 ? (
+                    <ol className="list-decimal list-inside space-y-2 text-sm text-muted-foreground pl-4">
+                      {instructionSteps.map((step, index) => (
+                        <li key={index}>{step}</li>
+                      ))}
+                    </ol>
+                  ) : (
+                    <p className="text-sm text-muted-foreground">No specific instructions available for this asset type.</p>
+                  )}
+                </div>
+              </TabsContent>
+            </ScrollArea>
+          </Tabs>
+        
+          <DialogFooter className="p-6 pt-4 border-t mt-auto">
+            <DialogClose asChild>
+              <Button type="button" variant="outline">Close</Button>
+            </DialogClose>
+            {/* This button now specifically saves tags. Config is saved via its own dialog. */}
+            <Button type="button" onClick={handleSaveTagsLocal}>Save Tags</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {currentAssetForEdit && (
+        <EditAssetConfigurationDialog
+          asset={currentAssetForEdit}
+          isOpen={isEditConfigOpen}
+          onOpenChange={setIsEditConfigOpen}
+          onSaveConfiguration={handleSaveConfiguration}
+        />
+      )}
+    </>
   );
 }

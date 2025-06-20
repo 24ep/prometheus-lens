@@ -1,3 +1,4 @@
+
 import type { Asset, AssetFolder } from '@/types';
 import { formatISO } from 'date-fns';
 
@@ -36,7 +37,7 @@ export let mockAssetsData: Asset[] = [
     type: 'Network',
     status: 'error',
     lastChecked: formatISO(new Date(Date.now() - 1000 * 60 * 15)), // 15 mins ago
-    configuration: { job_name: 'network_switch_dc_a', snmp_community: 's3cr3t', static_configs: [{ targets: ['10.0.1.1']}]},
+    configuration: { job_name: 'network_switch_dc_a', static_configs: [{ targets: ['snmp-exporter.example.com:9116/snmp?module=if_mib&target=10.0.1.1']}]}, // Example SNMP exporter target
     tags: ['core', 'snmp', 'cisco'],
     folderId: 'folder-4',
   },
@@ -83,11 +84,11 @@ export const addFolder = (name: string, parentId?: string): AssetFolder => {
   return newFolder;
 };
 
-export const updateFolder = (folderId: string, newName: string): AssetFolder | undefined => {
+export const updateFolder = (folderId: string, newName: string, newParentId?: string): AssetFolder | undefined => {
   let updatedFolder: AssetFolder | undefined;
   mockFoldersData = mockFoldersData.map(folder => {
     if (folder.id === folderId) {
-      updatedFolder = { ...folder, name: newName };
+      updatedFolder = { ...folder, name: newName, parentId: newParentId };
       return updatedFolder;
     }
     return folder;
@@ -122,10 +123,35 @@ export const updateAssetTags = (assetId: string, newTags: string[]): Asset | und
   let updatedAsset: Asset | undefined;
   mockAssetsData = mockAssetsData.map(asset => {
     if (asset.id === assetId) {
-      updatedAsset = { ...asset, tags: newTags };
+      updatedAsset = { ...asset, tags: newTags.sort() }; // Keep tags sorted for consistency
       return updatedAsset;
     }
     return asset;
   });
   return updatedAsset;
+};
+
+// Asset Configuration Management
+export const updateAssetConfiguration = (assetId: string, newConfiguration: Record<string, any>): Asset | undefined => {
+  let updatedAsset: Asset | undefined;
+  mockAssetsData = mockAssetsData.map(asset => {
+    if (asset.id === assetId) {
+      updatedAsset = { ...asset, configuration: newConfiguration };
+      return updatedAsset;
+    }
+    return asset;
+  });
+  return updatedAsset;
+};
+
+// Function to add a new asset (used by AssetConnectionWizard for mock saving)
+export const addAsset = (assetData: Omit<Asset, 'id' | 'lastChecked' | 'status'>): Asset => {
+  const newAsset: Asset = {
+    ...assetData,
+    id: `asset-${Date.now()}`,
+    lastChecked: formatISO(new Date()),
+    status: 'pending', // Default status for new assets
+  };
+  mockAssetsData = [newAsset, ...mockAssetsData];
+  return newAsset;
 };

@@ -1,27 +1,64 @@
+
 "use client";
 
+import React, { useState, useEffect } from 'react';
 import { AppLayout } from '@/components/layout/app-layout';
 import { useParams } from 'next/navigation';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
-import { mockAssetsData } from '@/lib/mock-data';
+import { mockAssetsData, mockFoldersData, updateAssetConfiguration as updateMockAssetConfiguration } from '@/lib/mock-data'; // Renamed import for clarity
+import type { Asset } from '@/types';
 import { Button } from '@/components/ui/button';
 import Link from 'next/link';
 import { ArrowLeft, Edit, ExternalLink } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { getMockInstructions } from '@/lib/asset-utils';
+import { EditAssetConfigurationDialog } from '@/components/assets/edit-asset-configuration-dialog';
+import { useToast } from '@/hooks/use-toast';
 
 export default function AssetDetailsPage() {
   const params = useParams();
   const assetId = params.id as string;
+  const { toast } = useToast();
 
-  // In a real app, fetch asset data here based on assetId
-  const asset = mockAssetsData.find(a => a.id === assetId);
+  // Local state for the asset to reflect updates, e.g. after config edit
+  const [asset, setAsset] = useState<Asset | null | undefined>(undefined); // undefined for loading state
+  const [isEditConfigOpen, setIsEditConfigOpen] = useState(false);
+
+  useEffect(() => {
+    // In a real app, fetch asset data here based on assetId
+    const foundAsset = mockAssetsData.find(a => a.id === assetId);
+    setAsset(foundAsset || null); // Set to null if not found after "fetch"
+  }, [assetId]);
+
+  const handleSaveConfiguration = (id: string, newConfiguration: Record<string, any>) => {
+    const updatedAsset = updateMockAssetConfiguration(id, newConfiguration);
+    if (updatedAsset) {
+      setAsset(updatedAsset); // Update local state to re-render with new config
+      // Note: This updates mockAssetsData in-memory. If this page were part of a larger SPA state,
+      // you might need a global state update or callback to inform other components.
+      toast({ title: "Configuration Saved", description: `Configuration for ${updatedAsset.name} has been updated.`});
+    } else {
+      toast({ title: "Error", description: "Failed to save configuration.", variant: "destructive"});
+    }
+    setIsEditConfigOpen(false);
+  };
+  
+  if (asset === undefined) {
+    return (
+      <AppLayout>
+        <div className="container mx-auto py-10 text-center">
+          <p>Loading asset details...</p>
+        </div>
+      </AppLayout>
+    );
+  }
 
   if (!asset) {
     return (
       <AppLayout>
         <div className="container mx-auto py-10 text-center">
-          <Card className="max-w-md mx-auto glassmorphic">
+          <Card className="max-w-md mx-auto">
             <CardHeader>
               <CardTitle className="font-headline">Asset Not Found</CardTitle>
             </CardHeader>
@@ -36,6 +73,9 @@ export default function AssetDetailsPage() {
       </AppLayout>
     );
   }
+
+  const instructionSteps = getMockInstructions(asset.type);
+  const folder = asset.folderId ? mockFoldersData.find(f => f.id === asset.folderId) : null;
 
   return (
     <AppLayout>
@@ -53,11 +93,16 @@ export default function AssetDetailsPage() {
                     <CardDescription className="text-base">{asset.type} Asset Details</CardDescription>
                 </div>
                 <div className="flex gap-2 mt-2 sm:mt-0">
-                    <Button variant="outline"><Edit className="mr-2 h-4 w-4"/>Edit Configuration</Button>
+                    <Button variant="outline" onClick={() => setIsEditConfigOpen(true)}>
+                        <Edit className="mr-2 h-4 w-4"/>Edit Configuration
+                    </Button>
                     {asset.grafanaLink && (
                          <a href={asset.grafanaLink} target="_blank" rel="noopener noreferrer">
                             <Button><ExternalLink className="mr-2 h-4 w-4"/>Open in Grafana</Button>
                          </a>
+                    )}
+                    {!asset.grafanaLink && (
+                        <Button disabled><ExternalLink className="mr-2 h-4 w-4"/>Grafana N/A</Button>
                     )}
                 </div>
             </div>
@@ -66,7 +111,7 @@ export default function AssetDetailsPage() {
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             <div className="md:col-span-2 space-y-6">
-                <Card className="glassmorphic">
+                <Card>
                     <CardHeader>
                         <CardTitle className="font-headline text-xl">Connection Status</CardTitle>
                     </CardHeader>
@@ -75,7 +120,7 @@ export default function AssetDetailsPage() {
                         <p className="mt-2">Last Checked: {new Date(asset.lastChecked).toLocaleString()}</p>
                     </CardContent>
                 </Card>
-                 <Card className="glassmorphic">
+                 <Card>
                     <CardHeader>
                         <CardTitle className="font-headline text-xl">Prometheus Configuration</CardTitle>
                     </CardHeader>
@@ -89,14 +134,15 @@ export default function AssetDetailsPage() {
                 </Card>
             </div>
             <div className="space-y-6">
-                <Card className="glassmorphic">
+                <Card>
                     <CardHeader>
                         <CardTitle className="font-headline text-xl">Metadata</CardTitle>
                     </CardHeader>
                     <CardContent className="space-y-2">
                         <p><strong>ID:</strong> {asset.id}</p>
                         <p><strong>Type:</strong> {asset.type}</p>
-                        {asset.folderId && <p><strong>Folder:</strong> {mockAssetsData.find(f => f.id === asset.folderId)?.name || asset.folderId}</p>}
+                        {folder && <p><strong>Folder:</strong> {folder.name}</p>}
+                        {!asset.folderId && <p><strong>Folder:</strong> <span className="text-muted-foreground">Uncategorized</span></p>}
                         <div>
                             <strong>Tags:</strong>
                             {asset.tags && asset.tags.length > 0 ? (
@@ -108,18 +154,33 @@ export default function AssetDetailsPage() {
                         </div>
                     </CardContent>
                 </Card>
-                <Card className="glassmorphic">
+                <Card>
                     <CardHeader>
                         <CardTitle className="font-headline text-xl">Instructions</CardTitle>
                     </CardHeader>
                     <CardContent>
-                        <p className="text-sm text-muted-foreground">Specific connection/troubleshooting instructions for '{asset.type}' assets would appear here.</p>
-                        {/* Example: <p>Ensure Node Exporter is running on port 9100.</p> */}
+                        {instructionSteps.length > 0 ? (
+                            <ol className="list-decimal list-inside space-y-2 text-sm text-muted-foreground pl-1">
+                                {instructionSteps.map((step, index) => (
+                                <li key={index}>{step}</li>
+                                ))}
+                            </ol>
+                        ) : (
+                            <p className="text-sm text-muted-foreground">No specific instructions available for this asset type.</p>
+                        )}
                     </CardContent>
                 </Card>
             </div>
         </div>
       </div>
+      {asset && (
+        <EditAssetConfigurationDialog
+            asset={asset}
+            isOpen={isEditConfigOpen}
+            onOpenChange={setIsEditConfigOpen}
+            onSaveConfiguration={handleSaveConfiguration}
+        />
+      )}
     </AppLayout>
   );
 }

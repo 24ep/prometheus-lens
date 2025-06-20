@@ -1,14 +1,16 @@
+
 "use client";
 
 import { AppLayout } from '@/components/layout/app-layout';
 import { AssetCard } from '@/components/common/asset-card';
 import { AssetListItem } from '@/components/common/asset-list-item';
-import { mockAssetsData, mockFoldersData, addFolder, updateFolder, deleteFolder, updateAssetTags } from '@/lib/mock-data';
+import { mockAssetsData, mockFoldersData, addFolder, updateFolder as updateMockFolder, deleteFolder, updateAssetTags } from '@/lib/mock-data';
 import type { Asset, AssetFolder } from '@/types';
 import { Button } from '@/components/ui/button';
-import Link from 'next/link';
+// Link removed as direct navigation to new asset page from here is replaced by dialog
+// import Link from 'next/link'; 
 import { useRouter } from 'next/navigation';
-import { PlusCircle, Filter, LayoutGrid, List, Edit2, Trash2, FolderPlus, PackagePlus } from 'lucide-react';
+import { PlusCircle, Filter, LayoutGrid, List, Edit2, Trash2 } from 'lucide-react'; // FolderPlus, PackagePlus removed
 import {
   Select,
   SelectContent,
@@ -29,13 +31,11 @@ export default function DashboardPage() {
   const { toast } = useToast();
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedFolderFilter, setSelectedFolderFilter] = useState<string | 'all'>('all');
-  const [viewMode, setViewMode] = useState<'list' | 'grid'>('list');
+  const [viewMode, setViewMode] = useState<'list' | 'grid'>('list'); // Default to 'list'
   
-  // Local state for mock data to reflect changes
-  const [assets, setAssets] = useState<Asset[]>(mockAssetsData);
-  const [folders, setFolders] = useState<AssetFolder[]>(mockFoldersData);
+  const [assets, setAssets] = useState<Asset[]>([]);
+  const [folders, setFolders] = useState<AssetFolder[]>([]);
 
-  // Dialog states
   const [isAssetDetailsDialogOpen, setIsAssetDetailsDialogOpen] = useState(false);
   const [selectedAssetForDetails, setSelectedAssetForDetails] = useState<Asset | null>(null);
   
@@ -45,12 +45,15 @@ export default function DashboardPage() {
   const [isConfirmDeleteFolderDialogOpen, setIsConfirmDeleteFolderDialogOpen] = useState(false);
   const [folderToDelete, setFolderToDelete] = useState<AssetFolder | null>(null);
 
+  // Function to refresh data from mock source
+  const refreshData = () => {
+    // Create new arrays to ensure re-render if underlying mockData instances change
+    setAssets([...mockAssetsData]);
+    setFolders([...mockFoldersData]);
+  };
 
   useEffect(() => {
-    // This effect can be used to re-sync if mockData changes externally,
-    // but for now, we manage 'assets' and 'folders' in local state.
-    setAssets(mockAssetsData);
-    setFolders(mockFoldersData);
+    refreshData();
   }, []);
 
 
@@ -65,34 +68,39 @@ export default function DashboardPage() {
   }, [searchTerm, selectedFolderFilter, assets]);
 
   const assetsByFolder = useMemo(() => {
-    if (selectedFolderFilter !== 'all') {
-      const folderIdToFilter = selectedFolderFilter === 'unfiled' ? 'unfiled' : selectedFolderFilter;
-      const folder = folderIdToFilter === 'unfiled' ? { id: 'unfiled', name: 'Uncategorized' } : folders.find(f => f.id === folderIdToFilter);
-      return folder ? { [folder.id]: { name: folder.name, assets: filteredAssets, id: folder.id } } : {};
-    }
-    
     const grouped: Record<string, { name: string; id: string; assets: Asset[] }> = {};
+    
+    // Create a map for quick folder name lookup
+    const folderMap = new Map(folders.map(f => [f.id, f.name]));
+
     filteredAssets.forEach(asset => {
       const folderId = asset.folderId || 'unfiled';
-      const folderName = folders.find(f => f.id === asset.folderId)?.name || 'Uncategorized';
+      const folderName = asset.folderId ? folderMap.get(asset.folderId) || 'Unknown Folder' : 'Uncategorized';
       if (!grouped[folderId]) {
         grouped[folderId] = { name: folderName, id: folderId, assets: [] };
       }
       grouped[folderId].assets.push(asset);
     });
-    // Ensure all folders (even empty ones) are shown if "All Folders" is selected
+    
     if (selectedFolderFilter === 'all') {
       folders.forEach(folder => {
         if (!grouped[folder.id]) {
           grouped[folder.id] = { name: folder.name, id: folder.id, assets: [] };
         }
       });
-      if (!grouped['unfiled']) {
+      if (!grouped['unfiled'] && assets.some(a => !a.folderId)) { // Only add 'Uncategorized' if there are unfiled assets
          grouped['unfiled'] = { name: 'Uncategorized', id: 'unfiled', assets: [] };
       }
+    } else if (selectedFolderFilter !== 'unfiled' && !grouped[selectedFolderFilter] && folders.some(f => f.id === selectedFolderFilter)) {
+      // If a specific folder is selected but has no matching assets, still show the folder group (empty)
+      grouped[selectedFolderFilter] = { name: folderMap.get(selectedFolderFilter) || 'Unknown Folder', id: selectedFolderFilter, assets: [] };
+    } else if (selectedFolderFilter === 'unfiled' && !grouped['unfiled']) {
+       grouped['unfiled'] = { name: 'Uncategorized', id: 'unfiled', assets: [] };
     }
+    
     return grouped;
-  }, [filteredAssets, selectedFolderFilter, folders]);
+  }, [filteredAssets, selectedFolderFilter, folders, assets]);
+
 
   const handleOpenAssetDetails = (asset: Asset) => {
     setSelectedAssetForDetails(asset);
@@ -103,34 +111,47 @@ export default function DashboardPage() {
     const updatedAsset = updateAssetTags(assetId, newTags);
     if (updatedAsset) {
       setAssets(prevAssets => prevAssets.map(a => a.id === assetId ? updatedAsset : a));
-      toast({ title: "Tags Updated", description: `Tags for ${updatedAsset.name} saved.` });
+      if (selectedAssetForDetails && selectedAssetForDetails.id === assetId) {
+        setSelectedAssetForDetails(updatedAsset); // Update details in dialog if it's the same asset
+      }
+      // Toast is handled within AssetDetailsDialog now
     }
   };
+
+  const handleAssetConfigurationSave = (updatedAsset: Asset) => {
+    setAssets(prevAssets => prevAssets.map(a => a.id === updatedAsset.id ? updatedAsset : a));
+    if (selectedAssetForDetails && selectedAssetForDetails.id === updatedAsset.id) {
+      setSelectedAssetForDetails(updatedAsset);
+    }
+    // Toast is handled within EditAssetConfigurationDialog
+  };
+
 
   const handleCreateItemTypeSelection = (type: 'asset' | 'folder') => {
     setIsCreateItemTypeDialogOpen(false);
     if (type === 'asset') {
       router.push('/assets/new');
     } else {
-      setFolderToEdit(null); // Ensure it's a create operation
+      setFolderToEdit(null); 
       setIsManageFolderDialogOpen(true);
     }
   };
   
   const handleSaveFolder = (folderData: { id?: string; name: string; parentId?: string }) => {
-    if (folderData.id) { // Editing existing folder
-      const updated = updateFolder(folderData.id, folderData.name);
+    if (folderData.id) { 
+      const updated = updateMockFolder(folderData.id, folderData.name, folderData.parentId);
       if (updated) {
         setFolders(prev => prev.map(f => f.id === updated.id ? updated : f));
         toast({ title: "Folder Updated", description: `Folder "${updated.name}" saved.`});
       }
-    } else { // Creating new folder
+    } else { 
       const newF = addFolder(folderData.name, folderData.parentId);
       setFolders(prev => [...prev, newF]);
       toast({ title: "Folder Created", description: `Folder "${newF.name}" added.`});
     }
     setIsManageFolderDialogOpen(false);
     setFolderToEdit(null);
+    refreshData(); // Re-fetch to ensure folder list in select is updated
   };
 
   const handleEditFolder = (folder: AssetFolder) => {
@@ -147,17 +168,19 @@ export default function DashboardPage() {
     if (folderToDelete) {
       const success = deleteFolder(folderToDelete.id);
       if (success) {
-        setFolders(prev => prev.filter(f => f.id !== folderToDelete.id));
-        // Assets within the deleted folder become unfiled, so we need to refresh asset state
-        setAssets(mockAssetsData.filter(_ => true)); // Re-fetch or re-filter assets
         toast({ title: "Folder Deleted", description: `Folder "${folderToDelete.name}" removed.`});
+        refreshData(); // Refresh all data
+        if (selectedFolderFilter === folderToDelete.id) {
+          setSelectedFolderFilter('all'); // Reset filter if deleted folder was selected
+        }
       } else {
-        toast({ title: "Error", description: "Could not delete folder.", variant: "destructive"});
+        toast({ title: "Error", description: "Could not delete folder. It might not exist or have dependencies.", variant: "destructive"});
       }
     }
     setIsConfirmDeleteFolderDialogOpen(false);
     setFolderToDelete(null);
   };
+  
 
   return (
     <AppLayout>
@@ -172,7 +195,7 @@ export default function DashboardPage() {
         </Button>
       </div>
 
-      <div className="mb-6 p-4 rounded-lg glassmorphic">
+      <div className="mb-6 p-4 rounded-lg border">
         <div className="grid grid-cols-1 md:grid-cols-[1fr_auto_auto] gap-4 items-end">
           <Input 
             placeholder="Search assets (name, type, tag)..."
@@ -187,7 +210,7 @@ export default function DashboardPage() {
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">All Folders</SelectItem>
-              {folders.map(folder => (
+              {folders.sort((a,b) => a.name.localeCompare(b.name)).map(folder => (
                 <SelectItem key={folder.id} value={folder.id}>{folder.name}</SelectItem>
               ))}
               <SelectItem value="unfiled">Uncategorized</SelectItem>
@@ -222,12 +245,18 @@ export default function DashboardPage() {
         </div>
       )}
 
-      {Object.entries(assetsByFolder).map(([folderId, group]) => (
+      {Object.entries(assetsByFolder)
+        .sort(([folderIdA, groupA], [folderIdB, groupB]) => { // Sort folders by name, Uncategorized last
+            if (groupA.id === 'unfiled') return 1;
+            if (groupB.id === 'unfiled') return -1;
+            return groupA.name.localeCompare(groupB.name);
+        })
+        .map(([folderId, group]) => (
         <div key={folderId} className="mb-8">
           {selectedFolderFilter === 'all' && (
-            <div className="flex justify-between items-center mb-4 pb-2 border-b border-border/50">
+            <div className="flex justify-between items-center mb-4 pb-2 border-b">
               <h2 className="text-2xl font-headline font-semibold text-foreground">{group.name} ({group.assets.length})</h2>
-              {group.id !== 'unfiled' && (
+              {group.id !== 'unfiled' && folders.find(f=>f.id === group.id) && ( // Ensure folder exists before showing edit/delete
                 <div className="flex gap-2">
                   <Button variant="ghost" size="icon" onClick={() => handleEditFolder(folders.find(f=>f.id === group.id)!)} aria-label="Edit folder">
                     <Edit2 className="h-4 w-4 text-muted-foreground hover:text-primary" />
@@ -247,21 +276,24 @@ export default function DashboardPage() {
                 ))}
               </div>
             ) : (
-              <div className="space-y-3 border border-border/50 rounded-lg p-3 glassmorphic">
+              <div className="space-y-3 border rounded-lg p-3">
                 {group.assets.map(asset => (
                   <AssetListItem key={asset.id} asset={asset} onDetailsClick={handleOpenAssetDetails} />
                 ))}
               </div>
             )
           ) : (
-             selectedFolderFilter !== 'all' && ( 
-              <div className="text-center py-6">
-                <p className="text-lg text-muted-foreground">No assets in this folder matching your search.</p>
+             (selectedFolderFilter !== 'all' || group.id === 'unfiled') && ( 
+              <div className="text-center py-6 border rounded-lg p-3">
+                <p className="text-lg text-muted-foreground">
+                  {selectedFolderFilter === 'all' && group.id === 'unfiled' && searchTerm === '' ? 'No uncategorized assets.' : 
+                   `No assets in ${group.name.toLowerCase()} matching your search.`}
+                </p>
               </div>
              )
           )}
-           {selectedFolderFilter === 'all' && group.assets.length === 0 && (
-             <div className="text-sm text-center py-4 text-muted-foreground">This folder is empty.</div>
+           {selectedFolderFilter === 'all' && group.assets.length === 0 && group.id !== 'unfiled' && (
+             <div className="text-sm text-center py-4 text-muted-foreground border rounded-lg p-3">This folder is empty.</div>
            )}
         </div>
       ))}
@@ -269,9 +301,11 @@ export default function DashboardPage() {
       {selectedAssetForDetails && (
         <AssetDetailsDialog
           asset={selectedAssetForDetails}
+          allFolders={folders}
           isOpen={isAssetDetailsDialogOpen}
           onOpenChange={setIsAssetDetailsDialogOpen}
           onSaveTags={handleSaveAssetTags}
+          onConfigurationSave={handleAssetConfigurationSave}
         />
       )}
 

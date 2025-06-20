@@ -7,15 +7,16 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Textarea } from '@/components/ui/textarea';
+// import { Textarea } from '@/components/ui/textarea'; // Not used directly for wizard fields now
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
-import { assetTypes, type AssetType, type Asset } from '@/types';
-import { mockFoldersData } from '@/lib/mock-data';
+import { assetTypes, type AssetType, type Asset, type FormData as WizardFormData } from '@/types';
+import { mockFoldersData, addAsset } from '@/lib/mock-data';
+import { getMockPrometheusConfig, getMockInstructions, assetTypeConfigPlaceholders } from '@/lib/asset-utils';
 import { ArrowLeft, ArrowRight, Check, Sparkles, Info, TestTubeDiagonal, FileText } from 'lucide-react';
-import { cn } from '@/lib/utils';
+// import { cn } from '@/lib/utils'; // Not used in this file anymore
 import { ScrollArea } from '../ui/scroll-area';
 import {
   Dialog,
@@ -27,6 +28,8 @@ import {
   DialogTrigger,
   DialogClose,
 } from '@/components/ui/dialog';
+import { useRouter } from 'next/navigation';
+
 
 const formSchema = z.object({
   name: z.string().min(3, { message: "Asset name must be at least 3 characters." }),
@@ -35,120 +38,29 @@ const formSchema = z.object({
   }),
   folderId: z.string().optional(),
   tags: z.string().optional(), // Comma-separated
-  config_param1: z.string().optional(),
-  config_param2: z.string().optional(),
-  prometheus_config: z.string().optional(),
+  config_param1: z.string().optional(), // Example: IP/Hostname or API Endpoint
+  config_param2: z.string().optional(), // Example: Port or Token
+  // prometheus_config: z.string().optional(), // This will be generated
 });
 
-type FormData = z.infer<typeof formSchema>;
+// Using WizardFormData from types.ts to align
+type CurrentFormData = WizardFormData;
 
 const STEPS = [
   { id: 1, name: 'Basic Information' },
-  { id: 2, name: 'Configuration' },
-  { id: 3, name: 'Instructions & Test' },
+  { id: 2, name: 'Configuration Details' },
+  { id: 3, name: 'Review & Test' },
 ];
-
-const assetTypeConfigPlaceholders: Record<AssetType, { param1: string, param2: string }> = {
-  Server: { param1: 'Server IP Address (e.g., 192.168.1.100)', param2: 'Node Exporter Port (e.g., 9100)' },
-  Network: { param1: 'Device IP / Hostname', param2: 'SNMP Community String' },
-  Application: { param1: 'Metrics Endpoint URL (e.g., http://app/metrics)', param2: 'Application Port (optional)' },
-  Database: { param1: 'Database Host Address', param2: 'Exporter Port (e.g., 9187 for PostgreSQL)' },
-  Kubernetes: { param1: 'API Server URL (e.g., https://kube-api.example.com)', param2: 'Bearer Token (optional)' },
-};
-
-const getMockPrometheusConfig = (data: Partial<FormData>): string => {
-  if (!data.type || !data.name) return `# Incomplete configuration`;
-  const jobName = data.name.toLowerCase().replace(/\s+/g, '_');
-  let targets = `'${data.config_param1 || 'TARGET_IP_OR_HOSTNAME'}:${data.config_param2 || 'PORT'}'`;
-  if (data.type === 'Application') {
-    targets = `'${data.config_param1 || 'METRICS_ENDPOINT'}'`;
-  } else if (data.type === 'Kubernetes') {
-    return `
-scrape_configs:
-  - job_name: '${jobName}'
-    kubernetes_sd_configs:
-      - role: pod
-        api_server: ${data.config_param1 || 'YOUR_K8S_API_SERVER'}
-    relabel_configs:
-      - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_scrape]
-        action: keep
-        regex: true
-`;
-  }
-
-  return `
-scrape_configs:
-  - job_name: '${jobName}'
-    static_configs:
-      - targets: [${targets}]
-`;
-};
-
-const getMockInstructions = (type?: AssetType): string[] => {
-  if (!type) return ["Select an asset type to see specific instructions."];
-  switch (type) {
-    case 'Server':
-      return [
-        "Install Node Exporter on the target server.",
-        "Ensure the Node Exporter port (default 9100) is accessible from your Prometheus server.",
-        "Verify Node Exporter is serving metrics at `/metrics` endpoint (e.g., `http://<server_ip>:9100/metrics`).",
-        "Add the generated scrape configuration to your `prometheus.yml` file.",
-        "Reload your Prometheus configuration (e.g., `kill -HUP <prometheus_pid>` or via API endpoint)."
-      ];
-    case 'Application':
-      return [
-        "Ensure your application exposes a Prometheus metrics endpoint (commonly `/metrics`).",
-        "If using a client library (e.g., prometheus-client for Python/Java, prom-client for Node.js), configure it appropriately.",
-        "Verify the metrics endpoint is accessible from your Prometheus server.",
-        "Add the generated scrape configuration to your `prometheus.yml` file.",
-        "Reload your Prometheus configuration."
-      ];
-    case 'Network':
-      return [
-        "Ensure SNMP is enabled on the network device.",
-        "Verify the SNMP community string and version (v1, v2c, or v3 credentials).",
-        "If not scraping the device directly, ensure an SNMP Exporter is running and configured to query the device.",
-        "Verify the SNMP Exporter's `/snmp` endpoint (e.g., `http://<exporter_ip>:9116/snmp?module=if_mib&target=<device_ip>`).",
-        "Add the generated scrape configuration to `prometheus.yml` (pointing to the SNMP Exporter).",
-        "Reload your Prometheus configuration."
-      ];
-    case 'Database':
-        return [
-            "Install the appropriate Prometheus exporter for your database type (e.g., `pg_exporter` for PostgreSQL, `mysqld_exporter` for MySQL).",
-            "Configure the exporter with connection details for your database instance.",
-            "Ensure the exporter port (e.g., 9187 for PostgreSQL, 9104 for MySQL) is accessible from Prometheus.",
-            "Verify the exporter is serving metrics at its `/metrics` endpoint.",
-            "Add the generated scrape configuration to your `prometheus.yml` file.",
-            "Reload your Prometheus configuration."
-        ];
-    case 'Kubernetes':
-        return [
-            "Ensure your Kubernetes cluster's API server is accessible by Prometheus.",
-            "Determine the appropriate service discovery role (e.g., `pod`, `service`, `node`, `endpoints`).",
-            "If required, provide a bearer token or configure TLS settings for authentication.",
-            "Apply necessary RBAC rules to allow Prometheus to discover targets (e.g., ClusterRole, ClusterRoleBinding).",
-            "Check for annotations like `prometheus.io/scrape: 'true'` and `prometheus.io/port: '<port_number>'` on your pods/services if using `relabel_configs` for filtering.",
-            "Add the generated scrape configuration to your `prometheus.yml` file.",
-            "Reload your Prometheus configuration."
-        ];
-    default:
-      return [
-        "Ensure the asset exposes Prometheus-compatible metrics on a reachable HTTP endpoint.",
-        "Add the generated scrape configuration to your `prometheus.yml` file.",
-        "Reload Prometheus configuration (e.g., `kill -HUP <prometheus_pid>` or via API endpoint)."
-      ];
-  }
-};
 
 
 export function AssetConnectionWizard() {
   const [currentStep, setCurrentStep] = useState(1);
   const { toast } = useToast();
-  const form = useForm<FormData>({
+  const router = useRouter();
+  const form = useForm<CurrentFormData>({
     resolver: zodResolver(formSchema),
     defaultValues: {
-      type: assetTypes[0],
-      // folderId will default to undefined
+      type: assetTypes[0], // Default to the first asset type
     },
   });
 
@@ -157,24 +69,81 @@ export function AssetConnectionWizard() {
   const watchedConfigParam1 = form.watch('config_param1');
   const watchedConfigParam2 = form.watch('config_param2');
 
-  const generatedConfig = getMockPrometheusConfig({
+  const generatedConfigObject = (() => {
+    const configString = getMockPrometheusConfig({
+        type: watchedType,
+        name: watchedName,
+        config_param1: watchedConfigParam1,
+        config_param2: watchedConfigParam2,
+      });
+    try {
+        // Assuming getMockPrometheusConfig returns a string that is a full YAML/JSON structure
+        // For Prometheus, it's usually YAML, but we are simplifying to JSON-like object structure
+        // and then the actual asset.configuration will store one job_def.
+        // This part needs careful handling based on actual getMockPrometheusConfig output.
+        // For now, let's parse it as if it's a JSON string of the whole config
+        // and extract the first scrape_config job.
+        // A simple approach for this mock:
+        // A real implementation would use a YAML parser if the string is YAML.
+        // Here, we're assuming getMockPrometheusConfig is crafted to produce a parseable representation.
+        if (configString.startsWith('# Incomplete configuration')) {
+            return { job_name: 'incomplete_config' };
+        }
+        // Hacky way to convert YAML-like string to a JS object for this mock
+        // This is NOT robust for real YAML.
+        const jobNameMatch = configString.match(/job_name:\s*'([^']+)'/);
+        const targetsMatch = configString.match(/targets:\s*\[([^\]]+)\]/);
+        const apiServerMatch = configString.match(/api_server:\s*([^\s]+)/);
+
+        const baseConfig: Record<string, any> = {
+            job_name: jobNameMatch ? jobNameMatch[1] : watchedName?.toLowerCase().replace(/\s+/g, '_') || 'new_job'
+        };
+
+        if (watchedType === 'Kubernetes') {
+            baseConfig.kubernetes_sd_configs = [{ 
+                role: 'pod', // default
+                api_server: apiServerMatch ? apiServerMatch[1] : watchedConfigParam1 || 'YOUR_K8S_API_SERVER'
+            }];
+            if (watchedConfigParam2) baseConfig.kubernetes_sd_configs[0].bearer_token_file = "/path/to/token"; // Placeholder if param2 is token
+        } else if (targetsMatch) {
+            const targets = targetsMatch[1].split(',').map(t => t.trim().replace(/'/g, ''));
+            baseConfig.static_configs = [{ targets }];
+        } else if (watchedConfigParam1) { // Fallback for Application type if regex fails
+             baseConfig.static_configs = [{ targets: [watchedConfigParam1] }];
+        }
+        
+        return baseConfig;
+
+    } catch (e) {
+        console.error("Error parsing generated config string:", e);
+        return { job_name: 'parsing_error' };
+    }
+  })();
+  
+  const generatedConfigStringForDisplay = getMockPrometheusConfig({
     type: watchedType,
     name: watchedName,
     config_param1: watchedConfigParam1,
     config_param2: watchedConfigParam2,
   });
 
+
   const instructionSteps = getMockInstructions(watchedType);
 
   const handleNext = async () => {
-    const isValid = await form.trigger(
-      currentStep === 1 ? ['name', 'type', 'folderId'] :
-      currentStep === 2 ? ['config_param1', 'config_param2'] : []
-    );
-    if (isValid && currentStep < STEPS.length) {
-      setCurrentStep(currentStep + 1);
-    } else if (isValid && currentStep === STEPS.length) {
-      onSubmit(form.getValues());
+    const fieldsToValidate: (keyof CurrentFormData)[] =
+      currentStep === 1 ? ['name', 'type', 'folderId', 'tags'] :
+      currentStep === 2 ? ['config_param1', 'config_param2'] : [];
+    
+    const isValid = await form.trigger(fieldsToValidate.length > 0 ? fieldsToValidate : undefined);
+
+    if (isValid) {
+      if (currentStep < STEPS.length) {
+        setCurrentStep(currentStep + 1);
+      } else {
+        // This is the final step, submit the form
+        onSubmit(form.getValues());
+      }
     }
   };
 
@@ -184,35 +153,43 @@ export function AssetConnectionWizard() {
     }
   };
 
-  const onSubmit = (data: FormData) => {
-    console.log(data);
-    // In a real app, you would save this data, likely to a backend
-    // For now, we'll just show a toast and potentially redirect or update local state
+  const onSubmit = (data: CurrentFormData) => {
+    const newAssetData: Omit<Asset, 'id' | 'lastChecked' | 'status'> = {
+      name: data.name,
+      type: data.type,
+      configuration: generatedConfigObject, // Use the parsed object
+      tags: data.tags ? data.tags.split(',').map(t => t.trim()).filter(t => t) : [],
+      folderId: data.folderId === NO_FOLDER_VALUE ? undefined : data.folderId,
+      // grafanaLink can be added later
+    };
+    
+    const savedAsset = addAsset(newAssetData); // Save to mock data
+
     toast({
       title: "Asset Configuration Saved!",
-      description: `Asset "${data.name}" of type "${data.type}" has been configured.`,
+      description: `Asset "${savedAsset.name}" of type "${savedAsset.type}" has been configured and added.`,
       variant: 'default',
     });
-    // Example: router.push('/'); or update a global state
+    router.push('/'); // Redirect to dashboard after saving
   };
 
   const handleTestConnection = () => {
-    toast({ title: "Testing Connection...", description: "This is a mock test." });
+    toast({ title: "Testing Connection...", description: "This is a mock test. Validating configuration..." });
     setTimeout(() => {
       const success = Math.random() > 0.3; // Simulate success/failure
       toast({
         title: success ? "Connection Successful!" : "Connection Failed",
-        description: success ? "Prometheus can reach the configured target." : "Could not connect. Check configuration and network.",
+        description: success ? `Prometheus can reach the configured target for ${watchedName}.` : `Could not connect for ${watchedName}. Check configuration and network.`,
         variant: success ? 'default' : 'destructive',
       });
     }, 1500);
   };
 
-  const configPlaceholders = watchedType ? assetTypeConfigPlaceholders[watchedType] : { param1: '', param2: '' };
+  const currentConfigPlaceholders = watchedType ? assetTypeConfigPlaceholders[watchedType] : { param1: 'Primary Config Parameter', param2: 'Secondary Config Parameter' };
   const NO_FOLDER_VALUE = "___NO_FOLDER___";
 
   return (
-    <Card className="w-full max-w-2xl mx-auto glassmorphic">
+    <Card className="w-full max-w-2xl mx-auto">
       <CardHeader>
         <CardTitle className="font-headline text-2xl flex items-center">
             <Sparkles className="w-6 h-6 mr-2 text-primary"/>
@@ -225,7 +202,7 @@ export function AssetConnectionWizard() {
       </CardHeader>
       <form onSubmit={form.handleSubmit(onSubmit)}>
         <CardContent className="space-y-6 min-h-[300px]">
-          {currentStep === 1 && (
+          {currentStep === 1 && ( // Basic Information
             <>
               <div>
                 <Label htmlFor="name">Asset Name</Label>
@@ -258,11 +235,9 @@ export function AssetConnectionWizard() {
                   name="folderId"
                   control={form.control}
                   render={({ field }) => (
-                    <Select
-                      onValueChange={(value) => {
-                        field.onChange(value === NO_FOLDER_VALUE ? undefined : value);
-                      }}
-                      value={field.value === undefined ? "" : field.value} // Pass "" to show placeholder if undefined
+                     <Select
+                      onValueChange={(value) => field.onChange(value === NO_FOLDER_VALUE ? undefined : value)}
+                      value={field.value || NO_FOLDER_VALUE}
                     >
                       <SelectTrigger id="folderId">
                         <SelectValue placeholder="Assign to a folder" />
@@ -283,29 +258,34 @@ export function AssetConnectionWizard() {
               </div>
             </>
           )}
-          {currentStep === 2 && (
+          {currentStep === 2 && ( // Configuration Details
             <>
-              <h3 className="text-lg font-medium font-headline">Configure for: {watchedType}</h3>
+              <h3 className="text-lg font-medium font-headline">Provide Configuration Details for: <span className="text-primary">{watchedType}</span></h3>
+              <p className="text-sm text-muted-foreground mb-4">Enter the specific parameters required to connect to your '{watchedType}' asset.</p>
               <div>
-                <Label htmlFor="config_param1">{configPlaceholders.param1.substring(0, configPlaceholders.param1.indexOf('(')-1) || 'Primary Config'}</Label>
-                <Input id="config_param1" {...form.register('config_param1')} placeholder={configPlaceholders.param1} />
+                <Label htmlFor="config_param1">{currentConfigPlaceholders.param1.substring(0, currentConfigPlaceholders.param1.indexOf('(')-1) || 'Primary Config Value'}</Label>
+                <Input id="config_param1" {...form.register('config_param1')} placeholder={currentConfigPlaceholders.param1} />
+                 {form.formState.errors.config_param1 && <p className="text-sm text-destructive mt-1">{form.formState.errors.config_param1.message}</p>}
               </div>
               <div>
-                <Label htmlFor="config_param2">{configPlaceholders.param2.substring(0, configPlaceholders.param2.indexOf('(')-1) || 'Secondary Config'}</Label>
-                <Input id="config_param2" {...form.register('config_param2')} placeholder={configPlaceholders.param2} />
+                <Label htmlFor="config_param2">{currentConfigPlaceholders.param2.substring(0, currentConfigPlaceholders.param2.indexOf('(')-1) || 'Secondary Config Value'}</Label>
+                <Input id="config_param2" {...form.register('config_param2')} placeholder={currentConfigPlaceholders.param2} />
+                {form.formState.errors.config_param2 && <p className="text-sm text-destructive mt-1">{form.formState.errors.config_param2.message}</p>}
               </div>
-              <div className="pt-2">
-                <Label htmlFor="prometheus_config">Generated Prometheus Configuration (Preview)</Label>
+               <div className="pt-2">
+                <Label>Generated Prometheus Configuration (Preview)</Label>
                 <ScrollArea className="h-40 w-full rounded-md border p-2 bg-muted/30">
-                  <pre className="text-xs font-code whitespace-pre-wrap">{generatedConfig}</pre>
+                  <pre className="text-xs font-code whitespace-pre-wrap">{generatedConfigStringForDisplay}</pre>
                 </ScrollArea>
-                <p className="text-xs text-muted-foreground mt-1">This is a simplified preview. You may need to adjust it.</p>
+                <p className="text-xs text-muted-foreground mt-1">This is a simplified preview. The actual saved configuration will be an object derived from this.</p>
               </div>
             </>
           )}
-          {currentStep === 3 && (
+          {currentStep === 3 && ( // Review & Test
             <>
-              <Dialog>
+              <h3 className="text-lg font-medium font-headline">Review Configuration & Instructions</h3>
+              <p className="text-sm text-muted-foreground mb-1">Ensure the generated configuration is correct and review the connection steps.</p>
+               <Dialog>
                 <DialogTrigger asChild>
                   <Button type="button" variant="outline" className="w-full mb-4">
                     <FileText className="mr-2 h-4 w-4" />
@@ -319,7 +299,7 @@ export function AssetConnectionWizard() {
                       Follow these steps to connect your {watchedType} asset to Prometheus.
                     </DialogDescription>
                   </DialogHeader>
-                  <ScrollArea className="h-72 w-full rounded-md border p-3 my-4 bg-background/50">
+                  <ScrollArea className="h-72 w-full rounded-md border p-3 my-4">
                     <ol className="list-decimal list-inside space-y-3 text-sm">
                       {instructionSteps.map((step, index) => (
                         <li key={index}>{step}</li>
@@ -333,12 +313,12 @@ export function AssetConnectionWizard() {
                   </DialogFooter>
                 </DialogContent>
               </Dialog>
-
               <div>
-                <Label>Generated Prometheus Configuration</Label>
+                <Label>Final Generated Prometheus Configuration (for `prometheus.yml`)</Label>
                  <ScrollArea className="h-40 w-full rounded-md border p-2 bg-muted/30">
-                  <pre className="text-xs font-code whitespace-pre-wrap">{generatedConfig}</pre>
+                  <pre className="text-xs font-code whitespace-pre-wrap">{generatedConfigStringForDisplay}</pre>
                 </ScrollArea>
+                 <p className="text-xs text-muted-foreground mt-1">The object stored internally will be the first job definition from `scrape_configs`.</p>
               </div>
               <Button type="button" variant="outline" onClick={handleTestConnection} className="w-full mt-4">
                 <TestTubeDiagonal className="mr-2 h-4 w-4" />
@@ -347,7 +327,7 @@ export function AssetConnectionWizard() {
             </>
           )}
         </CardContent>
-        <CardFooter className="flex justify-between pt-6 border-t border-[hsl(var(--glass-border-light))]">
+        <CardFooter className="flex justify-between pt-6 border-t">
           <Button type="button" variant="outline" onClick={handlePrevious} disabled={currentStep === 1}>
             <ArrowLeft className="mr-2 h-4 w-4" /> Previous
           </Button>
@@ -357,7 +337,7 @@ export function AssetConnectionWizard() {
             </Button>
           ) : (
             <Button type="submit">
-              <Check className="mr-2 h-4 w-4" /> Finish & Save
+              <Check className="mr-2 h-4 w-4" /> Finish & Save Asset
             </Button>
           )}
         </CardFooter>
@@ -365,4 +345,3 @@ export function AssetConnectionWizard() {
     </Card>
   );
 }
-
