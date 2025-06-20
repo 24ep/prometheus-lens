@@ -45,11 +45,11 @@ export function AssetListItem({ asset, onDetailsClick }: AssetListItemProps) {
 
   return (
     <Card className="glassmorphic overflow-hidden transition-all hover:shadow-lg w-full">
-      <CardContent className="p-4 flex flex-col gap-3 w-full text-sm">
+      <CardContent className="p-3 flex flex-col gap-2 w-full text-sm">
         {/* Top section: Icon, Name, Type, Status */}
         <div className="flex justify-between items-start">
-          <div className="flex items-center gap-3">
-            <AssetIcon className="h-7 w-7 text-primary shrink-0" />
+          <div className="flex items-center gap-2.5">
+            <AssetIcon className="h-6 w-6 text-primary shrink-0" />
             <div>
               <button onClick={() => onDetailsClick(asset)} className="text-left hover:underline">
                 <h3 className="font-headline font-semibold text-base leading-tight" title={asset.name}>{asset.name}</h3>
@@ -58,21 +58,21 @@ export function AssetListItem({ asset, onDetailsClick }: AssetListItemProps) {
             </div>
           </div>
           <div className="flex items-center gap-1 whitespace-nowrap text-xs" title={`Status: ${asset.status}`}>
-            <StatusIcon className={cn("h-4 w-4 shrink-0", statusTextColors[asset.status])} />
+            <StatusIcon className={cn("h-3.5 w-3.5 shrink-0", statusTextColors[asset.status])} />
             <span className={cn("capitalize", statusTextColors[asset.status])}>{asset.status}</span>
           </div>
         </div>
 
         {/* Middle section: Last Checked, Tags */}
-        <div className="space-y-2">
+        <div className="space-y-1.5">
           <div className="text-xs text-muted-foreground">
             Last Checked: {formatDistanceToNow(new Date(asset.lastChecked), { addSuffix: true })}
           </div>
 
           {asset.tags && asset.tags.length > 0 && (
-            <div className="flex flex-wrap gap-1.5">
+            <div className="flex flex-wrap gap-1">
               {asset.tags.map(tag => (
-                <Badge key={tag} variant="secondary" className="text-xs">{tag}</Badge>
+                <Badge key={tag} variant="secondary" className="text-xs px-1.5 py-0.5">{tag}</Badge>
               ))}
             </div>
           )}
@@ -82,7 +82,7 @@ export function AssetListItem({ asset, onDetailsClick }: AssetListItemProps) {
         </div>
         
         {/* Bottom section: Actions */}
-        <div className="flex gap-2 justify-end mt-1">
+        <div className="flex gap-1.5 justify-end mt-0.5">
           <Button variant="outline" size="sm" onClick={() => onDetailsClick(asset)}>
             <Info className="mr-1.5 h-3.5 w-3.5" />
             <span className="hidden sm:inline">Details</span>

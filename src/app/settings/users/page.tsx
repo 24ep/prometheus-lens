@@ -14,6 +14,7 @@ import { ManageGroupDialog } from '@/components/settings/users/manage-group-dial
 import { ConfirmDialog } from '@/components/common/confirm-dialog';
 import { useToast } from '@/hooks/use-toast';
 import { UserListItem } from '@/components/settings/users/user-list-item';
+import { cn } from '@/lib/utils';
 
 export default function UsersAndGroupsPage() {
   const { toast } = useToast();
@@ -148,7 +149,7 @@ export default function UsersAndGroupsPage() {
           </div>
 
           <TabsContent value="users">
-            <div className="space-y-4">
+            <div className="space-y-3">
               {users.map(user => (
                 <UserListItem 
                   key={user.id} 
@@ -164,26 +165,31 @@ export default function UsersAndGroupsPage() {
           </TabsContent>
 
           <TabsContent value="groups">
-            <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+            <div className="space-y-3">
               {groups.map(group => (
-                <Card key={group.id}>
-                  <CardHeader>
-                    <CardTitle className="text-xl">{group.name}</CardTitle>
-                    {group.description && <CardDescription>{group.description}</CardDescription>}
-                  </CardHeader>
-                  <CardContent>
-                    <p className="text-sm text-muted-foreground">
-                      Members: {users.filter(u => u.groupIds?.includes(group.id)).length}
-                    </p>
+                <Card key={group.id} className="overflow-hidden transition-all hover:shadow-md w-full">
+                  <CardContent className="p-3 flex flex-col md:flex-row md:items-start md:justify-between gap-3 text-sm">
+                    <div className="flex-1 space-y-1.5">
+                        <div className="flex items-center gap-2">
+                           <Building className="h-5 w-5 text-primary shrink-0" />
+                            <div>
+                                <h3 className="font-headline font-semibold text-base leading-tight">{group.name}</h3>
+                                {group.description && <p className="text-xs text-muted-foreground">{group.description}</p>}
+                            </div>
+                        </div>
+                        <p className="text-xs text-muted-foreground pl-7">
+                            Members: {users.filter(u => u.groupIds?.includes(group.id)).length}
+                        </p>
+                    </div>
+                     <div className="flex flex-col sm:flex-row gap-2 md:ml-4 shrink-0 pt-1 md:pt-0">
+                        <Button variant="outline" size="sm" onClick={() => handleOpenEditGroupDialog(group)}>
+                        <Edit className="mr-1.5 h-3.5 w-3.5" />Edit
+                        </Button>
+                        <Button variant="ghost" size="sm" onClick={() => handleOpenDeleteGroupDialog(group)} className="text-destructive hover:text-destructive hover:bg-destructive/10">
+                        <Trash2 className="mr-1.5 h-3.5 w-3.5" />Delete
+                        </Button>
+                    </div>
                   </CardContent>
-                  <CardFooter className="border-t pt-4">
-                    <Button variant="outline" size="sm" onClick={() => handleOpenEditGroupDialog(group)} className="mr-2">
-                      <Edit className="mr-2 h-4 w-4" />Edit
-                    </Button>
-                    <Button variant="ghost" size="sm" onClick={() => handleOpenDeleteGroupDialog(group)} className="text-destructive hover:text-destructive hover:bg-destructive/10">
-                      <Trash2 className="mr-2 h-4 w-4" />Delete
-                    </Button>
-                  </CardFooter>
                 </Card>
               ))}
               {groups.length === 0 && <p className="text-muted-foreground col-span-full text-center py-8">No groups found.</p>}
