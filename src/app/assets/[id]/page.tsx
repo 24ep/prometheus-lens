@@ -158,7 +158,7 @@ export default function AssetDetailsPage() {
                             </div>
                             {instructionSteps.length > 0 ? (
                                 <ScrollArea className="h-72 w-full rounded-md p-1">
-                                    <ol className="list-decimal list-inside space-y-4 text-sm text-muted-foreground">
+                                    <ol className="list-decimal list-inside space-y-4 text-sm">
                                         {instructionSteps.map((step, index) => (
                                         <li key={index} className="p-4 border rounded-lg bg-card shadow-sm" dangerouslySetInnerHTML={{ __html: step }}></li>
                                         ))}
