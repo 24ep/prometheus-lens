@@ -17,39 +17,46 @@ import {
   SidebarSeparator,
 } from '@/components/ui/sidebar';
 import { AppLogo } from '@/components/icons/logo';
-import { Button } from '@/components/ui/button';
+import { Button } from '@/components/ui/button'; // Button might not be directly used here anymore
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
   LayoutDashboard,
   Settings,
   Users,
-  FolderKanban,
+  // FolderKanban, // Not used
   LogOut,
   Moon,
   Sun,
-  Package, // Added for "All Assets"
+  Package,
 } from 'lucide-react';
-// import { useTheme } from 'next-themes'; // Assuming next-themes is or will be installed for theme toggling
+import { useTheme } from 'next-themes';
 import React from 'react';
 
 const navItems = [
   { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
-  { href: '/', label: 'All Assets', icon: Package }, // Changed icon and href if needed
+  { href: '/', label: 'All Assets', icon: Package },
   { type: 'separator' as const },
-  { href: '/settings/users', label: 'Users & Groups', icon: Users, disabled: true }, // Placeholder
+  { href: '/settings/users', label: 'Users & Groups', icon: Users, disabled: false },
   { href: '/settings', label: 'Settings', icon: Settings },
 ];
 
 export function AppLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
-  // const { theme, setTheme } = useTheme(); // Placeholder for theme toggle
+  const { theme, setTheme, resolvedTheme } = useTheme();
 
-  // Mock theme toggle state for now
-  const [currentTheme, setCurrentTheme] = React.useState('light');
   const toggleTheme = () => {
-    setCurrentTheme(currentTheme === 'light' ? 'dark' : 'light');
-    // In a real app with next-themes: setTheme(theme === 'light' ? 'dark' : 'light');
+    setTheme(resolvedTheme === 'dark' ? 'light' : 'dark');
   };
+
+  const getPageTitle = () => {
+    if (pathname === '/') return 'All Assets';
+    if (pathname === '/dashboard') return 'Dashboard Overview';
+    const activeItem = navItems.find(item => item.href === pathname && item.type !== 'separator');
+    if (activeItem) return activeItem.label;
+    if (pathname.startsWith('/assets/')) return 'Asset Details';
+    if (pathname.startsWith('/settings/users')) return 'Users & Groups';
+    return 'Prometheus Lens';
+  }
 
 
   return (
@@ -64,11 +71,11 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
               item.type === 'separator' ? (
                 <SidebarSeparator key={`sep-${index}`} className="my-2" />
               ) : (
-                item.href && ( // Ensure item.href exists before creating a link
+                item.href && ( 
                   <SidebarMenuItem key={item.label + '-' + item.href}>
-                    <Link href={item.href}>
+                    <Link href={item.href} passHref legacyBehavior={false}>
                       <SidebarMenuButton
-                        isActive={pathname === item.href} // Simpler active state logic now with distinct paths
+                        isActive={pathname === '/' && item.href === '/dashboard' ? true : pathname === item.href}
                         disabled={item.disabled}
                         tooltip={item.label}
                         aria-label={item.label}
@@ -86,8 +93,8 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
         <SidebarFooter className="p-2 border-t border-sidebar-border">
            <SidebarMenu>
             <SidebarMenuItem>
-              <SidebarMenuButton onClick={toggleTheme} tooltip={currentTheme === 'light' ? "Switch to Dark Mode" : "Switch to Light Mode"}>
-                {currentTheme === 'light' ? <Moon /> : <Sun />}
+              <SidebarMenuButton onClick={toggleTheme} tooltip={resolvedTheme === 'dark' ? "Switch to Light Mode" : "Switch to Dark Mode"}>
+                {resolvedTheme === 'dark' ? <Sun /> : <Moon />}
                 <span>Toggle Theme</span>
               </SidebarMenuButton>
             </SidebarMenuItem>
@@ -116,11 +123,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
             <SidebarTrigger />
           </div>
           <h1 className="font-headline text-xl font-semibold">
-            {navItems.find(item => item.href === pathname && item.type !== 'separator')?.label || 
-             (pathname === '/' ? 'All Assets' : // Handle root case if not explicitly in navItems with path '/'
-             pathname.startsWith('/assets/') ? 'Asset Details' :
-             'Prometheus Lens')
-            }
+            {getPageTitle()}
           </h1>
           <div>
             {/* Placeholder for header actions, e.g., global search or notifications */}

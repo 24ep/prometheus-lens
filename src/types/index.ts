@@ -31,3 +31,19 @@ export interface FormData {
   config_param2?: string; // e.g. Port or Token for K8s
   // prometheus_config is generated, not a direct form field
 }
+
+// User and Group Types
+export interface User {
+  id: string;
+  name: string;
+  email: string;
+  role: 'Admin' | 'Editor' | 'Viewer'; // Example roles
+  groupIds?: string[]; // IDs of groups the user belongs to
+}
+
+export interface Group {
+  id: string;
+  name: string;
+  description?: string;
+  // permissions could be an array of strings or a more complex object
+}

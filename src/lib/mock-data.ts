@@ -1,5 +1,5 @@
 
-import type { Asset, AssetFolder } from '@/types';
+import type { Asset, AssetFolder, User, Group } from '@/types';
 import { formatISO } from 'date-fns';
 
 export let mockFoldersData: AssetFolder[] = [
@@ -154,4 +154,82 @@ export const addAsset = (assetData: Omit<Asset, 'id' | 'lastChecked' | 'status'>
   };
   mockAssetsData = [newAsset, ...mockAssetsData];
   return newAsset;
+};
+
+
+// User and Group Mock Data
+export let mockUsersData: User[] = [
+  { id: 'user-1', name: 'Alice Wonderland', email: 'alice@example.com', role: 'Admin', groupIds: ['group-admin'] },
+  { id: 'user-2', name: 'Bob The Builder', email: 'bob@example.com', role: 'Editor', groupIds: ['group-editors', 'group-dev'] },
+  { id: 'user-3', name: 'Charlie Brown', email: 'charlie@example.com', role: 'Viewer', groupIds: ['group-viewers'] },
+];
+
+export let mockGroupsData: Group[] = [
+  { id: 'group-admin', name: 'Administrators', description: 'Users with full system access.' },
+  { id: 'group-editors', name: 'Content Editors', description: 'Users who can edit asset configurations.' },
+  { id: 'group-dev', name: 'Developers', description: 'Development team members.' },
+  { id: 'group-viewers', name: 'Viewers', description: 'Users with read-only access.' },
+];
+
+// User CRUD
+export const addUser = (userData: Omit<User, 'id'>): User => {
+  const newUser: User = { ...userData, id: `user-${Date.now()}` };
+  mockUsersData.push(newUser);
+  return newUser;
+};
+
+export const updateUser = (userId: string, userData: Partial<Omit<User, 'id'>>): User | undefined => {
+  let updatedUser: User | undefined;
+  mockUsersData = mockUsersData.map(user => {
+    if (user.id === userId) {
+      updatedUser = { ...user, ...userData };
+      return updatedUser;
+    }
+    return user;
+  });
+  return updatedUser;
+};
+
+export const deleteUser = (userId: string): boolean => {
+  const initialLength = mockUsersData.length;
+  mockUsersData = mockUsersData.filter(user => user.id !== userId);
+  return mockUsersData.length < initialLength;
+};
+
+// Group CRUD
+export const addGroup = (groupData: Omit<Group, 'id'>): Group => {
+  const newGroup: Group = { ...groupData, id: `group-${Date.now()}` };
+  mockGroupsData.push(newGroup);
+  return newGroup;
+};
+
+export const updateGroup = (groupId: string, groupData: Partial<Omit<Group, 'id'>>): Group | undefined => {
+  let updatedGroup: Group | undefined;
+  mockGroupsData = mockGroupsData.map(group => {
+    if (group.id === groupId) {
+      updatedGroup = { ...group, ...groupData };
+      return updatedGroup;
+    }
+    return group;
+  });
+  return updatedGroup;
+};
+
+export const deleteGroup = (groupId: string): boolean => {
+  const initialLength = mockGroupsData.length;
+  mockGroupsData = mockGroupsData.filter(group => group.id !== groupId);
+  // Also remove this group from any users who might be part of it
+  mockUsersData = mockUsersData.map(user => ({
+    ...user,
+    groupIds: user.groupIds?.filter(id => id !== groupId)
+  }));
+  return mockGroupsData.length < initialLength;
+};
+
+export const getGroupById = (groupId: string): Group | undefined => {
+    return mockGroupsData.find(g => g.id === groupId);
+};
+
+export const getUserById = (userId: string): User | undefined => {
+    return mockUsersData.find(u => u.id === userId);
 };
