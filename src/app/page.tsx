@@ -3,10 +3,11 @@
 
 import { AppLayout } from '@/components/layout/app-layout';
 import { AssetListItem } from '@/components/common/asset-list-item';
-import { mockAssetsData, mockFoldersData, addFolder, updateFolder as updateMockFolder, deleteFolder, updateAssetDetails } from '@/lib/mock-data';
-import type { Asset, AssetFolder } from '@/types';
+import { AssetTable } from '@/components/common/asset-table';
+import { mockAssetsData, mockFoldersData, addFolder, updateFolder as updateMockFolder, deleteFolder, updateAssetDetails, addAsset } from '@/lib/mock-data';
+import type { Asset, AssetFolder, AssetType } from '@/types';
 import { Button } from '@/components/ui/button';
-import { PlusCircle, Filter, Edit2, Trash2, Folder as FolderIcon, ChevronDown, ChevronRight, LayoutGrid, List } from 'lucide-react';
+import { PlusCircle, Filter, Edit2, Trash2, Folder as FolderIcon, ChevronDown, ChevronRight, LayoutGrid, List, FileDown, FileUp } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { AssetDetailsDialog } from '@/components/assets/asset-details-dialog';
 import { CreateItemTypeDialog } from '@/components/folders/create-item-type-dialog';
@@ -16,9 +17,11 @@ import { useToast } from '@/hooks/use-toast';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
 import { AssetConnectionWizard } from '@/components/assets/asset-connection-wizard';
 import { cn } from '@/lib/utils';
-import React, { useState, useMemo, useEffect, useCallback } from 'react';
+import React, { useState, useMemo, useEffect, useCallback, useRef } from 'react';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
+import * as XLSX from 'xlsx';
+import { getMockPrometheusConfig } from '@/lib/asset-utils';
 
 
 interface FolderNavItemProps {
@@ -29,7 +32,7 @@ interface FolderNavItemProps {
   onEditFolder: (folder: AssetFolder) => void;
   onDeleteFolder: (folder: AssetFolder) => void;
   selectedFolderId?: string | null;
-  assetCounts: Record<string, number>; // FolderId -> count of assets (including subfolders)
+  assetCounts: Record<string, number>; 
   initiallyOpen?: boolean;
 }
 
@@ -51,7 +54,6 @@ const FolderNavItem: React.FC<FolderNavItemProps> = ({
   const count = assetCounts[folder.id] || 0;
 
   useEffect(() => {
-    // If a folder is selected and it's this one or a child, ensure it's open
      if (selectedFolderId) {
         let currentFolder = allFolders.find(f => f.id === selectedFolderId);
         let shouldOpen = false;
@@ -64,36 +66,36 @@ const FolderNavItem: React.FC<FolderNavItemProps> = ({
         }
         if(shouldOpen && !isOpen) setIsOpen(true);
     } else {
-        setIsOpen(initiallyOpen); // Default open state if no selection forces it
+        setIsOpen(initiallyOpen); 
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedFolderId, folder.id, allFolders, initiallyOpen]); // isOpen removed from deps to avoid loop
+  }, [selectedFolderId, folder.id, allFolders, initiallyOpen]);
 
 
   return (
     <div className="my-0.5">
-      <div 
+      <div
         className={cn(
           "flex justify-between items-center py-1.5 px-2 rounded-md group text-sm",
           isActive ? "bg-primary/10 text-primary font-medium" : "hover:bg-muted/60"
         )}
         style={{ paddingLeft: `${0.5 + level * 1}rem` }}
       >
-        <div 
-            className="flex items-center gap-1.5 flex-grow min-w-0 cursor-pointer" 
+        <div
+            className="flex items-center gap-1.5 flex-grow min-w-0 cursor-pointer"
             onClick={() => onSelectFolder(folder.id)}
-            role="button" 
-            tabIndex={0} 
-            onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && onSelectFolder(folder.id)} 
+            role="button"
+            tabIndex={0}
+            onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && onSelectFolder(folder.id)}
         >
           <button
             onClick={(e) => {
-              e.stopPropagation(); // Prevent selecting folder when toggling expand
+              e.stopPropagation(); 
               if (hasChildren) setIsOpen(!isOpen);
             }}
             className={cn(
               "p-0.5 rounded-sm hover:bg-muted-foreground/10",
-              !hasChildren && "opacity-0 pointer-events-none" // Hide if no children
+              !hasChildren && "opacity-0 pointer-events-none" 
             )}
             aria-label={hasChildren ? (isOpen ? "Collapse folder" : "Expand folder") : undefined}
             disabled={!hasChildren}
@@ -101,7 +103,7 @@ const FolderNavItem: React.FC<FolderNavItemProps> = ({
             {hasChildren ? (
               isOpen ? <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground" /> : <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" />
             ) : (
-              <div className="w-4 h-4 shrink-0"></div> 
+              <div className="w-4 h-4 shrink-0"></div>
             )}
           </button>
           <FolderIcon className="h-4 w-4 text-primary shrink-0" />
@@ -132,7 +134,7 @@ const FolderNavItem: React.FC<FolderNavItemProps> = ({
               onDeleteFolder={onDeleteFolder}
               selectedFolderId={selectedFolderId}
               assetCounts={assetCounts}
-              initiallyOpen={false} // Children initially closed unless selection forces them open
+              initiallyOpen={false} 
             />
           ))}
         </div>
@@ -146,24 +148,26 @@ export default function AllAssetsPage() {
   const { toast } = useToast();
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedFolderFilter, setSelectedFolderFilter] = useState<string | 'all' | 'unfiled'>('all');
-  
+
   const [assets, setAssets] = useState<Asset[]>([]);
   const [folders, setFolders] = useState<AssetFolder[]>([]);
 
   const [isAssetDetailsDialogOpen, setIsAssetDetailsDialogOpen] = useState(false);
   const [selectedAssetForDetails, setSelectedAssetForDetails] = useState<Asset | null>(null);
-  
+
   const [isCreateItemTypeDialogOpen, setIsCreateItemTypeDialogOpen] = useState(false);
   const [isManageFolderDialogOpen, setIsManageFolderDialogOpen] = useState(false);
   const [folderToEdit, setFolderToEdit] = useState<AssetFolder | null>(null);
   const [isConfirmDeleteFolderDialogOpen, setIsConfirmDeleteFolderDialogOpen] = useState(false);
   const [folderToDelete, setFolderToDelete] = useState<AssetFolder | null>(null);
   const [isAssetWizardOpen, setIsAssetWizardOpen] = useState(false);
-  const [viewMode, setViewMode] = useState<'list' | 'grid'>('list'); // Default to list view
+  const [viewMode, setViewMode] = useState<'list' | 'table'>('list');
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
 
   const refreshData = useCallback(() => {
-    setAssets([...mockAssetsData]); 
-    setFolders([...mockFoldersData].sort((a, b) => a.name.localeCompare(b.name))); 
+    setAssets([...mockAssetsData]);
+    setFolders([...mockFoldersData].sort((a, b) => a.name.localeCompare(b.name)));
   }, []);
 
   useEffect(() => {
@@ -184,7 +188,7 @@ export default function AllAssetsPage() {
       const matchesSearch = asset.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
                             asset.type.toLowerCase().includes(searchTerm.toLowerCase()) ||
                             (asset.tags && asset.tags.some(tag => tag.toLowerCase().includes(searchTerm.toLowerCase())));
-      
+
       let matchesFolder = false;
       if (selectedFolderFilter === 'all') {
         matchesFolder = true;
@@ -197,7 +201,7 @@ export default function AllAssetsPage() {
       return matchesSearch && matchesFolder;
     });
   }, [searchTerm, selectedFolderFilter, assets, folders, getFolderAndSubFolderIds]);
-  
+
   const assetCountsByFolder = useMemo(() => {
     const counts: Record<string, number> = {};
     const allFolderIdsIncludingChildren = (folderId: string): string[] => getFolderAndSubFolderIds(folderId, folders);
@@ -222,46 +226,46 @@ export default function AllAssetsPage() {
 
   const handleSaveAssetDetails = (assetId: string, details: { tags: string[], grafanaLink?: string }) => {
     updateAssetDetails(assetId, details);
-    refreshData(); 
+    refreshData();
     if (selectedAssetForDetails && selectedAssetForDetails.id === assetId) {
        const updatedAssetFromMock = mockAssetsData.find(a => a.id === assetId);
        if (updatedAssetFromMock) setSelectedAssetForDetails(updatedAssetFromMock);
     }
   };
-  
+
   const handleAssetConfigurationSave = (updatedAssetFromDialog: Asset) => {
     refreshData();
     if (selectedAssetForDetails && selectedAssetForDetails.id === updatedAssetFromDialog.id) {
        setSelectedAssetForDetails(updatedAssetFromDialog);
     }
   };
-  
+
   const handleCreateItemTypeSelection = (type: 'asset' | 'folder') => {
     setIsCreateItemTypeDialogOpen(false);
     if (type === 'asset') {
       setIsAssetWizardOpen(true);
     } else {
-      setFolderToEdit(null); 
+      setFolderToEdit(null);
       setIsManageFolderDialogOpen(true);
     }
   };
 
   const handleAssetWizardSave = (savedAsset: Asset) => {
-    refreshData(); 
+    refreshData();
     setIsAssetWizardOpen(false);
     toast({
       title: "Asset Added!",
       description: `Asset "${savedAsset.name}" of type "${savedAsset.type}" has been configured.`,
     });
   };
-  
+
   const handleSaveFolder = (folderData: { id?: string; name: string; parentId?: string }) => {
-    if (folderData.id) { 
+    if (folderData.id) {
       const updated = updateMockFolder(folderData.id, folderData.name, folderData.parentId);
       if (updated) {
         toast({ title: "Folder Updated", description: `Folder "${updated.name}" saved.`});
       }
-    } else { 
+    } else {
       const newF = addFolder(folderData.name, folderData.parentId);
       toast({ title: "Folder Created", description: `Folder "${newF.name}" added.`});
     }
@@ -282,11 +286,11 @@ export default function AllAssetsPage() {
 
   const confirmDeleteFolder = () => {
     if (folderToDelete) {
-      const success = deleteFolder(folderToDelete.id); 
+      const success = deleteFolder(folderToDelete.id);
       if (success) {
         toast({ title: "Folder Deleted", description: `Folder "${folderToDelete.name}" removed.`});
         if (selectedFolderFilter === folderToDelete.id) {
-          setSelectedFolderFilter('all'); 
+          setSelectedFolderFilter('all');
         }
       } else {
         toast({ title: "Error", description: "Could not delete folder. It might not exist.", variant: "destructive"});
@@ -296,16 +300,162 @@ export default function AllAssetsPage() {
     setIsConfirmDeleteFolderDialogOpen(false);
     setFolderToDelete(null);
   };
-  
+
   const handleSelectFolderFilter = (folderId: string | 'all' | 'unfiled') => {
     setSelectedFolderFilter(folderId);
   };
 
+  const handleExportToExcel = () => {
+    const dataToExport = filteredAssets.map(asset => {
+      const folder = asset.folderId ? folders.find(f => f.id === asset.folderId) : null;
+      return {
+        ID: asset.id,
+        Name: asset.name,
+        Type: asset.type,
+        Status: asset.status,
+        'Last Checked': new Date(asset.lastChecked).toLocaleString(),
+        'Grafana Link': asset.grafanaLink || '',
+        Folder: folder ? folder.name : 'Uncategorized',
+        Tags: asset.tags?.join(', ') || '',
+        'Config Job Name': asset.configuration?.job_name || '',
+        'Config Targets': asset.configuration?.static_configs?.[0]?.targets?.join(', ') || 
+                          (asset.configuration?.kubernetes_sd_configs?.[0]?.api_server ? `K8s API: ${asset.configuration.kubernetes_sd_configs[0].api_server}` : ''),
+      };
+    });
+
+    const worksheet = XLSX.utils.json_to_sheet(dataToExport);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, "Assets");
+    XLSX.writeFile(workbook, "PrometheusLens_Assets_Export.xlsx");
+    toast({ title: "Export Successful", description: `${dataToExport.length} assets exported to Excel.` });
+  };
+
+  const handleDownloadImportTemplate = () => {
+    const templateHeaders = [
+        "Name", "Type", "FolderName", "Tags", 
+        "ConfigParam1", "ConfigParam2", "GrafanaLink"
+    ];
+    const exampleRow = [
+        "My New Server", "Server", "Production Servers", "web, critical", 
+        "192.168.1.105", "9100", "https://grafana.example.com/d/newserver"
+    ];
+    const ws = XLSX.utils.aoa_to_sheet([templateHeaders, exampleRow]);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "AssetImportTemplate");
+    XLSX.writeFile(wb, "PrometheusLens_Import_Template.xlsx");
+    toast({ title: "Template Downloaded", description: "Asset import template is ready." });
+  };
+
+  const handleImportFromExcel = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      try {
+        const data = e.target?.result;
+        const workbook = XLSX.read(data, { type: 'binary' });
+        const sheetName = workbook.SheetNames[0];
+        const worksheet = workbook.Sheets[sheetName];
+        const jsonData = XLSX.utils.sheet_to_json(worksheet) as any[];
+
+        let importedCount = 0;
+        let errorCount = 0;
+
+        jsonData.forEach((row, index) => {
+          const { Name, Type, FolderName, Tags, ConfigParam1, ConfigParam2, GrafanaLink } = row;
+
+          if (!Name || !Type) {
+            toast({ title: `Import Error (Row ${index + 2})`, description: "Name and Type are required.", variant: "destructive" });
+            errorCount++;
+            return;
+          }
+          
+          let folderId: string | undefined = undefined;
+          if (FolderName) {
+            const foundFolder = folders.find(f => f.name.toLowerCase() === String(FolderName).toLowerCase());
+            if (foundFolder) {
+              folderId = foundFolder.id;
+            } else {
+               toast({ title: `Import Warning (Row ${index + 2})`, description: `Folder "${FolderName}" not found. Asset will be uncategorized.`, variant: "default" });
+            }
+          }
+          
+          const configObject = getMockPrometheusConfig({
+              name: String(Name),
+              type: Type as AssetType,
+              config_param1: ConfigParam1 ? String(ConfigParam1) : undefined,
+              config_param2: ConfigParam2 ? String(ConfigParam2) : undefined,
+          });
+
+          let finalConfig = {};
+          if (!configObject.startsWith('# Incomplete configuration')) {
+            try {
+                // This is a mock parsing, not robust for all YAML structures from getMockPrometheusConfig
+                const jobNameMatch = configObject.match(/job_name:\s*'([^']+)'/);
+                finalConfig = { job_name: jobNameMatch ? jobNameMatch[1] : String(Name).toLowerCase().replace(/\s+/g, '_') || 'new_job' };
+
+                if (configObject.includes("kubernetes_sd_configs:")) {
+                    const apiServerMatch = configObject.match(/api_server:\s*'?([^'\s]+)'?/);
+                    const roleMatch = configObject.match(/role:\s*(\w+)/);
+                    (finalConfig as any).kubernetes_sd_configs = [{ 
+                        role: roleMatch ? roleMatch[1] : 'pod', 
+                        api_server: apiServerMatch ? apiServerMatch[1] : ConfigParam1 || 'YOUR_K8S_API_SERVER_URL'
+                    }];
+                    if (ConfigParam2) (finalConfig as any).kubernetes_sd_configs[0].bearer_token_file = ConfigParam2;
+                } else if (configObject.includes("static_configs:")) {
+                    const targetsMatch = configObject.match(/targets:\s*\[([^\]]+)\]/);
+                     if (targetsMatch) {
+                        const targets = targetsMatch[1].split(',').map(t => t.trim().replace(/'/g, ''));
+                        (finalConfig as any).static_configs = [{ targets }];
+                    } else if (ConfigParam1) {
+                        (finalConfig as any).static_configs = [{ targets: [`${ConfigParam1}${ConfigParam2 ? ':'+ConfigParam2 : ''}`] }];
+                    }
+                }
+            } catch (parseErr) {
+                finalConfig = { job_name: String(Name).toLowerCase().replace(/\s+/g, '_'), error: 'Could not parse generated config string into an object.'};
+            }
+          } else {
+             finalConfig = { job_name: String(Name).toLowerCase().replace(/\s+/g, '_'), error: 'Initial config generation incomplete.'};
+          }
+
+
+          const newAssetData: Omit<Asset, 'id' | 'lastChecked' | 'status'> = {
+            name: String(Name),
+            type: Type as AssetType, // Basic type validation should be added
+            configuration: finalConfig,
+            tags: Tags ? String(Tags).split(',').map(t => t.trim()).filter(t => t) : [],
+            folderId: folderId,
+            grafanaLink: GrafanaLink ? String(GrafanaLink) : undefined,
+          };
+          addAsset(newAssetData);
+          importedCount++;
+        });
+
+        refreshData();
+        if (importedCount > 0) {
+            toast({ title: "Import Successful", description: `${importedCount} assets imported. ${errorCount > 0 ? errorCount + ' rows had errors.' : ''}` });
+        } else if (errorCount > 0) {
+            toast({ title: "Import Failed", description: `No assets imported. ${errorCount} rows had errors.`, variant: "destructive" });
+        } else {
+            toast({ title: "Import Note", description: "No data found to import or file was empty."});
+        }
+
+      } catch (error) {
+        console.error("Error importing Excel:", error);
+        toast({ title: "Import Error", description: "Failed to process the Excel file.", variant: "destructive" });
+      } finally {
+        if (fileInputRef.current) {
+            fileInputRef.current.value = ""; // Reset file input
+        }
+      }
+    };
+    reader.readAsBinaryString(file);
+  };
 
   return (
     <AppLayout>
-      <div className="flex h-[calc(100vh-var(--header-height,4rem)-2rem)]"> {/* Main flex container */}
-        {/* Left Column: Folder Navigation */}
+      <div className="flex h-[calc(100vh-var(--header-height,4rem)-2rem)]">
         <div className="w-64 xl:w-72 border-r bg-card/30 shrink-0">
           <ScrollArea className="h-full p-3">
             <h2 className="text-sm font-semibold text-muted-foreground px-2 mb-2">BROWSE FOLDERS</h2>
@@ -340,7 +490,7 @@ export default function AllAssetsPage() {
                   onDeleteFolder={handleDeleteFolder}
                   selectedFolderId={selectedFolderFilter !== 'all' && selectedFolderFilter !== 'unfiled' ? selectedFolderFilter : null}
                   assetCounts={assetCountsByFolder}
-                  initiallyOpen={true} 
+                  initiallyOpen={true}
                 />
               ))}
                {folders.length === 0 && (
@@ -350,13 +500,12 @@ export default function AllAssetsPage() {
           </ScrollArea>
         </div>
 
-        {/* Right Column: Asset Display */}
         <div className="flex-1 flex flex-col overflow-hidden">
           <div className="p-4 pb-3 border-b bg-background/80 backdrop-blur-sm sticky top-0 z-10 shrink-0">
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
               <div>
                 <h1 className="text-2xl font-headline font-bold text-foreground">
-                  {selectedFolderFilter === 'all' ? 'All Assets' : 
+                  {selectedFolderFilter === 'all' ? 'All Assets' :
                    selectedFolderFilter === 'unfiled' ? 'Uncategorized Assets' :
                    folders.find(f => f.id === selectedFolderFilter)?.name || 'Assets'}
                 </h1>
@@ -365,38 +514,49 @@ export default function AllAssetsPage() {
                     {searchTerm && ` (filtered by "${searchTerm}")`}
                 </p>
               </div>
-              <div className="flex items-center gap-2 w-full sm:w-auto">
-                <Input 
+              <div className="flex items-center gap-2 w-full sm:w-auto flex-wrap">
+                <Input
                   placeholder="Search assets..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
-                  className="bg-background focus:bg-background h-9 flex-grow sm:flex-grow-0 sm:w-64"
+                  className="bg-background focus:bg-background h-9 flex-grow sm:flex-grow-0 sm:w-48 md:w-64"
                 />
                 <Button onClick={() => setIsCreateItemTypeDialogOpen(true)} size="sm" className="h-9">
-                  <PlusCircle className="mr-2 h-4 w-4" />
-                  Add Item
+                  <PlusCircle className="mr-2 h-4 w-4" /> Add Item
                 </Button>
-                {/* View Mode Toggle - Optional, keeping simple for now
-                <Button variant="outline" size="icon" className="h-9 w-9" onClick={() => setViewMode(viewMode === 'list' ? 'grid' : 'list')}>
+                <Button variant="outline" size="icon" className="h-9 w-9" onClick={() => setViewMode(viewMode === 'list' ? 'table' : 'list')} title={viewMode === 'list' ? 'Switch to Table View' : 'Switch to List View'}>
                   {viewMode === 'list' ? <LayoutGrid className="h-4 w-4"/> : <List className="h-4 w-4" />}
                 </Button>
-                */}
+                 <input type="file" ref={fileInputRef} onChange={handleImportFromExcel} accept=".xlsx, .xls" style={{ display: 'none' }} />
+                <Button variant="outline" size="sm" className="h-9" onClick={() => fileInputRef.current?.click()}>
+                  <FileUp className="mr-2 h-4 w-4"/> Import
+                </Button>
+                <Button variant="outline" size="sm" className="h-9" onClick={handleExportToExcel}>
+                  <FileDown className="mr-2 h-4 w-4"/> Export
+                </Button>
+                <Button variant="outline" size="sm" className="h-9" onClick={handleDownloadImportTemplate}>
+                  <FileDown className="mr-2 h-4 w-4"/> Template
+                </Button>
               </div>
             </div>
           </div>
-          
+
           <ScrollArea className="flex-grow p-4">
             {filteredAssets.length > 0 ? (
-              <div className="space-y-2">
-                {filteredAssets.map(asset => (
-                  <AssetListItem key={asset.id} asset={asset} onDetailsClick={handleOpenAssetDetails} />
-                ))}
-              </div>
+              viewMode === 'list' ? (
+                <div className="space-y-2">
+                  {filteredAssets.map(asset => (
+                    <AssetListItem key={asset.id} asset={asset} onDetailsClick={handleOpenAssetDetails} />
+                  ))}
+                </div>
+              ) : (
+                <AssetTable assets={filteredAssets} allFolders={folders} onDetailsClick={handleOpenAssetDetails} />
+              )
             ) : (
               <div className="text-center py-10">
                 <p className="text-lg text-muted-foreground">
-                  {searchTerm || (selectedFolderFilter !== 'all' && selectedFolderFilter !== 'unfiled') 
-                    ? "No assets match your current filters." 
+                  {searchTerm || (selectedFolderFilter !== 'all' && selectedFolderFilter !== 'unfiled')
+                    ? "No assets match your current filters."
                     : "No assets or folders found."
                   }
                 </p>
@@ -453,7 +613,7 @@ export default function AllAssetsPage() {
       {isAssetWizardOpen && (
         <Dialog open={isAssetWizardOpen} onOpenChange={setIsAssetWizardOpen}>
           <DialogContent className="sm:max-w-2xl p-0">
-            <AssetConnectionWizard 
+            <AssetConnectionWizard
               onSaveComplete={handleAssetWizardSave}
             />
           </DialogContent>
@@ -463,5 +623,3 @@ export default function AllAssetsPage() {
     </AppLayout>
   );
 }
-
-        
