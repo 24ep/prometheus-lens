@@ -12,18 +12,10 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { assetTypes, type AssetType, type Asset, type FormData as WizardFormData } from '@/types';
 import { mockFoldersData, addAsset } from '@/lib/mock-data';
 import { getMockPrometheusConfig, getMockInstructions, assetTypeConfigPlaceholders } from '@/lib/asset-utils';
-import { ArrowLeft, ArrowRight, Check, Sparkles, FileText, TestTubeDiagonal } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Check, Sparkles, TestTubeDiagonal, Download } from 'lucide-react'; // FileText removed, Download added
 import { ScrollArea } from '../ui/scroll-area';
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-  DialogClose,
-} from '@/components/ui/dialog';
+// Dialog related imports for nested dialog (if any were still used, but instructions dialog is removed) are no longer needed for instructions
+// import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger, DialogClose } from '@/components/ui/dialog';
 
 
 const formSchema = z.object({
@@ -42,20 +34,15 @@ type CurrentFormData = WizardFormData;
 const STEPS = [
   { id: 1, name: 'Basic Information' },
   { id: 2, name: 'Configuration Details' },
-  { id: 3, name: 'Review & Test' },
+  { id: 3, name: 'Review & Download' }, // Updated step name
 ];
 
 interface AssetConnectionWizardProps {
   onSaveComplete: (savedAsset: Asset) => void;
-  // onCancel is implicitly handled by Dialog's onOpenChange
 }
 
 export function AssetConnectionWizard({ onSaveComplete }: AssetConnectionWizardProps) {
   const [currentStep, setCurrentStep] = useState(1);
-  // Toast is now handled by the parent component (DashboardPage)
-  // const { toast } = useToast(); 
-  // Router is no longer needed for navigation from here
-  // const router = useRouter(); 
 
   const form = useForm<CurrentFormData>({
     resolver: zodResolver(formSchema),
@@ -143,15 +130,29 @@ export function AssetConnectionWizard({ onSaveComplete }: AssetConnectionWizardP
     };
     
     const savedAsset = addAsset(newAssetData);
-    onSaveComplete(savedAsset); // Call the callback
+    onSaveComplete(savedAsset);
   };
 
   const handleTestConnection = () => {
-    // This toast is fine here as it's self-contained to the wizard's action
-    // Parent component (DashboardPage) will show toast for overall save.
-    // For consistency, if all toasts are to be managed by parent, this could also be a callback.
-    // However, for an interim action like "Test", local toast is acceptable.
-    alert("Mock Test Connection: Simulating validation..."); // Replaced toast with alert for simplicity in dialog
+    alert("Mock Test Connection: Simulating validation...");
+  };
+
+  const handleDownloadYaml = () => {
+    if (!generatedConfigStringForDisplay || generatedConfigStringForDisplay.startsWith('# Incomplete configuration')) {
+      alert("Configuration is incomplete or invalid. Cannot download.");
+      return;
+    }
+
+    const filename = `${watchedName?.toLowerCase().replace(/\s+/g, '_') || 'prometheus_config'}.yaml`;
+    const blob = new Blob([generatedConfigStringForDisplay], { type: 'application/x-yaml' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
   };
 
   const currentConfigPlaceholders = watchedType ? assetTypeConfigPlaceholders[watchedType] : { param1: 'Primary Config Parameter', param2: 'Secondary Config Parameter' };
@@ -159,7 +160,7 @@ export function AssetConnectionWizard({ onSaveComplete }: AssetConnectionWizardP
 
   return (
     <>
-      <div className="p-6 pb-4 border-b"> {/* Simulates DialogHeader content */}
+      <div className="p-6 pb-4 border-b">
         <div className="flex items-center font-headline text-2xl">
             <Sparkles className="w-6 h-6 mr-2 text-primary"/>
             New Asset Connection Wizard
@@ -170,11 +171,11 @@ export function AssetConnectionWizard({ onSaveComplete }: AssetConnectionWizardP
         </div>
       </div>
       <form onSubmit={form.handleSubmit(onSubmit)}>
-        <div className="space-y-6 min-h-[300px] p-6 max-h-[60vh] overflow-y-auto"> {/* Simulates DialogContent area */}
+        <div className="space-y-6 min-h-[300px] p-6 max-h-[calc(80vh-150px)] overflow-y-auto"> {/* Adjusted max-h slightly */}
           {currentStep === 1 && (
             <>
               <div>
-                <Label htmlFor="name-wizard">Asset Name</Label> {/* Ensure unique ID if multiple forms */}
+                <Label htmlFor="name-wizard">Asset Name</Label>
                 <Input id="name-wizard" {...form.register('name')} placeholder="e.g., Production Web Server" />
                 {form.formState.errors.name && <p className="text-sm text-destructive mt-1">{form.formState.errors.name.message}</p>}
               </div>
@@ -252,51 +253,48 @@ export function AssetConnectionWizard({ onSaveComplete }: AssetConnectionWizardP
           )}
           {currentStep === 3 && ( 
             <>
-              <h3 className="text-lg font-medium font-headline">Review Configuration & Instructions</h3>
-              <p className="text-sm text-muted-foreground mb-1">Ensure the generated configuration is correct and review the connection steps.</p>
-               <Dialog> {/* This Dialog is nested, which is generally fine for secondary info popups */}
-                <DialogTrigger asChild>
-                  <Button type="button" variant="outline" className="w-full mb-4">
-                    <FileText className="mr-2 h-4 w-4" />
-                    View Connection Instructions for {watchedType}
-                  </Button>
-                </DialogTrigger>
-                <DialogContent className="sm:max-w-[625px]">
-                  <DialogHeader>
-                    <DialogTitle className="font-headline">Connection Instructions: {watchedType}</DialogTitle>
-                    <DialogDescription>
-                      Follow these steps to connect your {watchedType} asset to Prometheus.
-                    </DialogDescription>
-                  </DialogHeader>
-                  <ScrollArea className="h-72 w-full rounded-md border p-3 my-4">
-                    <ol className="list-decimal list-inside space-y-3 text-sm">
-                      {instructionSteps.map((step, index) => (
-                        <li key={index}>{step}</li>
-                      ))}
-                    </ol>
+              <h3 className="text-lg font-medium font-headline">Review, Download & Test</h3>
+              <p className="text-sm text-muted-foreground mb-4">Ensure the generated configuration is correct, review connection steps, and download the YAML if needed.</p>
+
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <div>
+                  <Label className="font-semibold block mb-1.5">Connection Instructions for {watchedType}</Label>
+                  <ScrollArea className="h-72 w-full rounded-md border p-3 bg-muted/20">
+                    {instructionSteps.length > 0 ? (
+                      <ol className="list-decimal list-inside space-y-3 text-sm">
+                        {instructionSteps.map((step, index) => (
+                          <li key={index}>{step}</li>
+                        ))}
+                      </ol>
+                    ) : (
+                      <p className="text-sm text-muted-foreground">No specific instructions for this asset type.</p>
+                    )}
                   </ScrollArea>
-                  <DialogFooter>
-                    <DialogClose asChild>
-                      <Button type="button" variant="outline">Close</Button>
-                    </DialogClose>
-                  </DialogFooter>
-                </DialogContent>
-              </Dialog>
-              <div>
-                <Label>Final Generated Prometheus Configuration (for `prometheus.yml`)</Label>
-                 <ScrollArea className="h-40 w-full rounded-md border p-2 bg-muted/30">
-                  <pre className="text-xs font-code whitespace-pre-wrap">{generatedConfigStringForDisplay}</pre>
-                </ScrollArea>
-                 <p className="text-xs text-muted-foreground mt-1">The object stored internally will be the first job definition from `scrape_configs`.</p>
+                </div>
+
+                <div>
+                  <div className="flex justify-between items-center mb-1.5">
+                    <Label className="font-semibold">Prometheus Configuration</Label>
+                    <Button type="button" variant="outline" size="sm" onClick={handleDownloadYaml} disabled={generatedConfigStringForDisplay.startsWith('# Incomplete configuration')}>
+                      <Download className="mr-2 h-4 w-4" />
+                      Download YAML
+                    </Button>
+                  </div>
+                  <ScrollArea className="h-72 w-full rounded-md border p-2 bg-muted/30">
+                    <pre className="text-xs font-code whitespace-pre-wrap">{generatedConfigStringForDisplay}</pre>
+                  </ScrollArea>
+                  <p className="text-xs text-muted-foreground mt-1">This is the content for your `prometheus.yml` file. The object stored internally will be the first job definition from `scrape_configs`.</p>
+                </div>
               </div>
-              <Button type="button" variant="outline" onClick={handleTestConnection} className="w-full mt-4">
+              
+              <Button type="button" variant="outline" onClick={handleTestConnection} className="w-full mt-6">
                 <TestTubeDiagonal className="mr-2 h-4 w-4" />
                 Test Connection (Mock)
               </Button>
             </>
           )}
         </div>
-        <div className="flex justify-between p-6 pt-4 border-t"> {/* Simulates DialogFooter content */}
+        <div className="flex justify-between p-6 pt-4 border-t">
           <Button type="button" variant="outline" onClick={handlePrevious} disabled={currentStep === 1}>
             <ArrowLeft className="mr-2 h-4 w-4" /> Previous
           </Button>
