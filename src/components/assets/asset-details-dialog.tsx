@@ -10,7 +10,7 @@ import { Label } from '@/components/ui/label';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter, DialogClose } from '@/components/ui/dialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { ExternalLink, X, PlusCircle, Edit, Settings2, Info, Tag, ListChecks, FileText } from 'lucide-react';
+import { ExternalLink, X, PlusCircle, Edit, Settings2, Info, Tag, ListChecks, FileText, Download } from 'lucide-react';
 import React, { useState, useEffect } from 'react';
 import { useToast } from '@/hooks/use-toast';
 import { getMockInstructions } from '@/lib/asset-utils';
@@ -74,14 +74,35 @@ export function AssetDetailsDialog({ asset, allFolders, isOpen, onOpenChange, on
   const handleSaveConfiguration = (assetId: string, newConfiguration: Record<string, any>) => {
     const updatedAsset = updateAssetConfiguration(assetId, newConfiguration);
     if (updatedAsset) {
-      setCurrentAssetForEdit(updatedAsset);
-      onConfigurationSave(updatedAsset);
+      setCurrentAssetForEdit(updatedAsset); // Ensure currentAssetForEdit in this dialog is updated
+      onConfigurationSave(updatedAsset); // Propagate to parent (page.tsx)
       toast({ title: "Configuration Saved", description: `Configuration for ${updatedAsset.name} has been updated.` });
     } else {
       toast({ title: "Error", description: "Failed to save configuration.", variant: "destructive" });
     }
     setIsEditConfigOpen(false);
   };
+
+  const handleDownloadYaml = () => {
+    if (!currentAssetForEdit || !currentAssetForEdit.configuration) {
+      toast({ title: "Error", description: "Asset configuration not available for download.", variant: "destructive"});
+      return;
+    }
+
+    const filename = `${currentAssetForEdit.name.toLowerCase().replace(/\s+/g, '_') || 'prometheus_config'}.yaml`;
+    const yamlContent = JSON.stringify({ scrape_configs: [currentAssetForEdit.configuration] }, null, 2);
+    
+    const blob = new Blob([yamlContent], { type: 'application/x-yaml' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
+
 
   return (
     <>
@@ -90,16 +111,16 @@ export function AssetDetailsDialog({ asset, allFolders, isOpen, onOpenChange, on
           <DialogHeader className="p-6 pb-4 border-b">
             <div className="flex flex-col sm:flex-row justify-between items-start gap-2">
               <div>
-                <DialogTitle className="font-headline text-2xl">{asset.name}</DialogTitle>
-                <DialogDescription className="text-base">{asset.type} Asset</DialogDescription>
+                <DialogTitle className="font-headline text-2xl">{currentAssetForEdit?.name}</DialogTitle>
+                <DialogDescription className="text-base">{currentAssetForEdit?.type} Asset</DialogDescription>
               </div>
               <div className="flex gap-2 mt-2 sm:mt-0">
-                {asset.grafanaLink && (
-                  <a href={asset.grafanaLink} target="_blank" rel="noopener noreferrer">
+                {currentAssetForEdit?.grafanaLink && (
+                  <a href={currentAssetForEdit.grafanaLink} target="_blank" rel="noopener noreferrer">
                     <Button size="sm"><ExternalLink className="mr-2 h-4 w-4" />Open in Grafana</Button>
                   </a>
                 )}
-                 {!asset.grafanaLink && (
+                 {!currentAssetForEdit?.grafanaLink && (
                     <Button size="sm" disabled><ExternalLink className="mr-2 h-4 w-4" />Grafana N/A</Button>
                  )}
               </div>
@@ -135,6 +156,7 @@ export function AssetDetailsDialog({ asset, allFolders, isOpen, onOpenChange, on
                  <div className="p-4 rounded-lg border bg-card/50">
                     <h3 className="font-headline text-lg mb-2">Key Metrics (Placeholder)</h3>
                     <p className="text-sm text-muted-foreground">Key performance indicators and metrics for this asset would appear here.</p>
+                     <img src="https://placehold.co/400x200.png" alt="Placeholder metrics chart" data-ai-hint="chart graph" className="w-full h-auto rounded-md mt-2"/>
                 </div>
               </TabsContent>
 
@@ -142,9 +164,15 @@ export function AssetDetailsDialog({ asset, allFolders, isOpen, onOpenChange, on
                 <div className="p-4 rounded-lg border bg-card/50">
                     <div className="flex justify-between items-center mb-2">
                         <h3 className="font-headline text-lg">Prometheus Configuration</h3>
-                        <Button variant="outline" size="sm" onClick={handleOpenEditConfig}>
-                            <Edit className="mr-2 h-4 w-4"/>Edit Configuration
-                        </Button>
+                        <div className="flex gap-2">
+                            <Button variant="outline" size="sm" onClick={handleOpenEditConfig}>
+                                <Edit className="mr-2 h-4 w-4"/>Edit
+                            </Button>
+                            <Button variant="outline" size="sm" onClick={handleDownloadYaml} disabled={!currentAssetForEdit?.configuration}>
+                              <Download className="mr-2 h-4 w-4" />
+                              YAML
+                            </Button>
+                        </div>
                     </div>
                     <ScrollArea className="h-60 w-full rounded-md border p-3 bg-muted/20">
                         <pre className="text-xs font-code whitespace-pre-wrap">

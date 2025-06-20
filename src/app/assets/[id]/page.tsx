@@ -9,7 +9,7 @@ import { mockAssetsData, mockFoldersData, updateAssetConfiguration as updateMock
 import type { Asset } from '@/types';
 import { Button } from '@/components/ui/button';
 import Link from 'next/link';
-import { ArrowLeft, Edit, ExternalLink, TestTubeDiagonal } from 'lucide-react';
+import { ArrowLeft, Edit, ExternalLink, TestTubeDiagonal, Download } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { getMockInstructions } from '@/lib/asset-utils';
@@ -42,6 +42,26 @@ export default function AssetDetailsPage() {
 
   const handleTestConnection = () => {
     alert("Mock Test Connection: Simulating validation for " + asset?.name);
+  };
+
+  const handleDownloadYaml = () => {
+    if (!asset || !asset.configuration) {
+      toast({ title: "Error", description: "Asset configuration not available for download.", variant: "destructive"});
+      return;
+    }
+
+    const filename = `${asset.name.toLowerCase().replace(/\s+/g, '_') || 'prometheus_config'}.yaml`;
+    const yamlContent = JSON.stringify({ scrape_configs: [asset.configuration] }, null, 2);
+    
+    const blob = new Blob([yamlContent], { type: 'application/x-yaml' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
   };
   
   if (asset === undefined) {
@@ -124,8 +144,12 @@ export default function AssetDetailsPage() {
                     </CardContent>
                 </Card>
                  <Card>
-                    <CardHeader>
+                    <CardHeader className="flex flex-row justify-between items-center">
                         <CardTitle className="font-headline text-xl">Prometheus Configuration</CardTitle>
+                        <Button variant="outline" size="sm" onClick={handleDownloadYaml} disabled={!asset.configuration}>
+                          <Download className="mr-2 h-4 w-4" />
+                          Download YAML
+                        </Button>
                     </CardHeader>
                     <CardContent>
                         <ScrollArea className="h-48 w-full rounded-md border p-3 bg-muted/30">
