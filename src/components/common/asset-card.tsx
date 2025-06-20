@@ -4,13 +4,13 @@ import type { Asset } from '@/types';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import Link from 'next/link';
-import { Server, Network, AppWindow, Database, Box, ExternalLink, Zap, XCircle, AlertTriangle, CheckCircle2, Hourglass } from 'lucide-react';
+import { Server, Network, AppWindow, Database, Box, ExternalLink, Zap, XCircle, AlertTriangle, CheckCircle2, Hourglass, Info } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { formatDistanceToNow } from 'date-fns';
 
 interface AssetCardProps {
   asset: Asset;
+  onDetailsClick: (asset: Asset) => void;
 }
 
 const assetIcons: Record<Asset['type'], React.ElementType> = {
@@ -35,7 +35,7 @@ const statusIcons: Record<Asset['status'], React.ElementType> = {
   pending: Hourglass,
 };
 
-export function AssetCard({ asset }: AssetCardProps) {
+export function AssetCard({ asset, onDetailsClick }: AssetCardProps) {
   const Icon = assetIcons[asset.type];
   const StatusIcon = statusIcons[asset.status];
 
@@ -65,7 +65,6 @@ export function AssetCard({ asset }: AssetCardProps) {
           </div>
         )}
         <p className="text-sm text-muted-foreground line-clamp-2">
-          {/* Placeholder for a short description or key config value */}
           {asset.configuration?.job_name ? `Job: ${asset.configuration.job_name}` : 
            asset.configuration?.static_configs?.[0]?.targets?.[0] ? `Target: ${asset.configuration.static_configs[0].targets[0]}` : 
            'No primary target listed.'}
@@ -73,19 +72,24 @@ export function AssetCard({ asset }: AssetCardProps) {
       </CardContent>
       <CardFooter className="pt-0 border-t border-[hsl(var(--glass-border-light))] bg-white/10 dark:bg-black/10">
         <div className="flex w-full justify-between items-center mt-4">
-          <Link href={`/assets/${asset.id}`}>
-            <Button variant="outline" size="sm">
-              <Zap className="mr-2 h-4 w-4" />
-              Details
-            </Button>
-          </Link>
-          {asset.grafanaLink && (
-            <a href={asset.grafanaLink} target="_blank" rel="noopener noreferrer">
-              <Button variant="ghost" size="sm" className="text-primary hover:text-accent-foreground hover:bg-accent">
-                Grafana <ExternalLink className="ml-2 h-4 w-4" />
-              </Button>
-            </a>
-          )}
+          <Button variant="outline" size="sm" onClick={() => onDetailsClick(asset)}>
+            <Info className="mr-2 h-4 w-4" />
+            Details
+          </Button>
+          
+          <Button 
+            variant="ghost" 
+            size="sm" 
+            disabled={!asset.grafanaLink}
+            onClick={() => asset.grafanaLink && window.open(asset.grafanaLink, '_blank', 'noopener,noreferrer')}
+            className={cn(
+              "text-primary hover:text-accent-foreground hover:bg-accent",
+              !asset.grafanaLink && "text-muted-foreground hover:text-muted-foreground hover:bg-transparent cursor-not-allowed"
+            )}
+            aria-label={asset.grafanaLink ? "Open in Grafana" : "Grafana link not available"}
+          >
+            Grafana <ExternalLink className="ml-2 h-4 w-4" />
+          </Button>
         </div>
       </CardFooter>
     </Card>

@@ -1,14 +1,14 @@
 import type { Asset, AssetFolder } from '@/types';
 import { formatISO } from 'date-fns';
 
-export const mockFoldersData: AssetFolder[] = [
+export let mockFoldersData: AssetFolder[] = [
   { id: 'folder-1', name: 'Production Servers' },
   { id: 'folder-2', name: 'Staging Applications' },
   { id: 'folder-3', name: 'Core Databases', parentId: 'folder-1' },
   { id: 'folder-4', name: 'Networking Gear'},
 ];
 
-export const mockAssetsData: Asset[] = [
+export let mockAssetsData: Asset[] = [
   {
     id: 'asset-1',
     name: 'Alpha Web Server Cluster',
@@ -71,3 +71,61 @@ export const mockAssetsData: Asset[] = [
     tags: ['java', 'tomcat'],
   },
 ];
+
+// Folder CRUD operations
+export const addFolder = (name: string, parentId?: string): AssetFolder => {
+  const newFolder: AssetFolder = {
+    id: `folder-${Date.now()}`, // Simple unique ID generation
+    name,
+    parentId,
+  };
+  mockFoldersData = [...mockFoldersData, newFolder];
+  return newFolder;
+};
+
+export const updateFolder = (folderId: string, newName: string): AssetFolder | undefined => {
+  let updatedFolder: AssetFolder | undefined;
+  mockFoldersData = mockFoldersData.map(folder => {
+    if (folder.id === folderId) {
+      updatedFolder = { ...folder, name: newName };
+      return updatedFolder;
+    }
+    return folder;
+  });
+  return updatedFolder;
+};
+
+export const deleteFolder = (folderId: string): boolean => {
+  const folderExists = mockFoldersData.some(folder => folder.id === folderId);
+  if (!folderExists) return false;
+
+  mockFoldersData = mockFoldersData.filter(folder => folder.id !== folderId);
+  // Un-assign assets from the deleted folder
+  mockAssetsData = mockAssetsData.map(asset => {
+    if (asset.folderId === folderId) {
+      return { ...asset, folderId: undefined };
+    }
+    return asset;
+  });
+  // Also handle child folders if any (simple case: unassign parentId)
+   mockFoldersData = mockFoldersData.map(folder => {
+    if (folder.parentId === folderId) {
+      return { ...folder, parentId: undefined };
+    }
+    return folder;
+  });
+  return true;
+};
+
+// Asset Tag Management
+export const updateAssetTags = (assetId: string, newTags: string[]): Asset | undefined => {
+  let updatedAsset: Asset | undefined;
+  mockAssetsData = mockAssetsData.map(asset => {
+    if (asset.id === assetId) {
+      updatedAsset = { ...asset, tags: newTags };
+      return updatedAsset;
+    }
+    return asset;
+  });
+  return updatedAsset;
+};
