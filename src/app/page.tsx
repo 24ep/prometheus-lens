@@ -8,9 +8,8 @@ import { mockAssetsData, mockFoldersData, addFolder, updateFolder as updateMockF
 import type { Asset, AssetFolder } from '@/types';
 import { Button } from '@/components/ui/button';
 // Link removed as direct navigation to new asset page from here is replaced by dialog
-// import Link from 'next/link'; 
 // import { useRouter } from 'next/navigation'; // Potentially not needed if wizard handles itself or through callbacks
-import { PlusCircle, Filter, LayoutGrid, List, Edit2, Trash2 } from 'lucide-react'; // FolderPlus, PackagePlus removed
+import { PlusCircle, Filter, LayoutGrid, List, Edit2, Trash2, Package } from 'lucide-react'; // FolderPlus, PackagePlus removed
 import {
   Select,
   SelectContent,
@@ -28,7 +27,7 @@ import { useToast } from '@/hooks/use-toast';
 import { Dialog, DialogContent } from '@/components/ui/dialog'; // Import Dialog components
 import { AssetConnectionWizard } from '@/components/assets/asset-connection-wizard'; // Import the wizard
 
-export default function DashboardPage() {
+export default function AllAssetsPage() { // Renamed component for clarity
   // const router = useRouter(); // May not be needed
   const { toast } = useToast();
   const [searchTerm, setSearchTerm] = useState('');
@@ -191,8 +190,8 @@ export default function DashboardPage() {
     <AppLayout>
       <div className="mb-6 flex flex-col sm:flex-row justify-between items-center gap-4">
         <div>
-          <h1 className="text-3xl font-headline font-bold text-foreground">Asset Dashboard</h1>
-          <p className="text-muted-foreground">Overview of your monitored assets and folders.</p>
+          <h1 className="text-3xl font-headline font-bold text-foreground">Asset Management</h1>
+          <p className="text-muted-foreground">Browse, filter, and manage all your monitored assets and folders.</p>
         </div>
         <Button onClick={() => setIsCreateItemTypeDialogOpen(true)}>
           <PlusCircle className="mr-2 h-5 w-5" />

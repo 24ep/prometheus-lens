@@ -27,13 +27,14 @@ import {
   LogOut,
   Moon,
   Sun,
+  Package, // Added for "All Assets"
 } from 'lucide-react';
 // import { useTheme } from 'next-themes'; // Assuming next-themes is or will be installed for theme toggling
 import React from 'react';
 
 const navItems = [
-  { href: '/', label: 'Dashboard', icon: LayoutDashboard },
-  { href: '/', label: 'All Assets', icon: FolderKanban },
+  { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
+  { href: '/', label: 'All Assets', icon: Package }, // Changed icon and href if needed
   { type: 'separator' as const },
   { href: '/settings/users', label: 'Users & Groups', icon: Users, disabled: true }, // Placeholder
   { href: '/settings', label: 'Settings', icon: Settings },
@@ -67,11 +68,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                   <SidebarMenuItem key={item.label + '-' + item.href}>
                     <Link href={item.href}>
                       <SidebarMenuButton
-                        isActive={
-                          item.href === '/' 
-                            ? (pathname === '/' && item.label === 'Dashboard') 
-                            : pathname === item.href
-                        }
+                        isActive={pathname === item.href} // Simpler active state logic now with distinct paths
                         disabled={item.disabled}
                         tooltip={item.label}
                         aria-label={item.label}
@@ -119,7 +116,11 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
             <SidebarTrigger />
           </div>
           <h1 className="font-headline text-xl font-semibold">
-            {navItems.find(item => item.href === pathname && item.type !== 'separator')?.label || 'Prometheus Lens'}
+            {navItems.find(item => item.href === pathname && item.type !== 'separator')?.label || 
+             (pathname === '/' ? 'All Assets' : // Handle root case if not explicitly in navItems with path '/'
+             pathname.startsWith('/assets/') ? 'Asset Details' :
+             'Prometheus Lens')
+            }
           </h1>
           <div>
             {/* Placeholder for header actions, e.g., global search or notifications */}
