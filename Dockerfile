@@ -1,5 +1,5 @@
 # Stage 1: Install dependencies and build the application
-FROM node:18-alpine AS builder
+FROM node:18 AS builder
 WORKDIR /app
 
 # Copy package.json and package-lock.json
@@ -15,7 +15,7 @@ COPY . .
 RUN npm run build
 
 # Stage 2: Create the production image
-FROM node:18-alpine
+FROM node:18
 WORKDIR /app
 
 # Set environment variables
