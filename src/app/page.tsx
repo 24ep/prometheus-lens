@@ -1,4 +1,3 @@
-
 "use client";
 
 import { AppLayout } from '@/components/layout/app-layout';
@@ -142,6 +141,21 @@ const FolderNavItem: React.FC<FolderNavItemProps> = ({
   );
 };
 
+async function reloadPrometheusConfig(toast) {
+  try {
+    const res = await fetch('/api/prometheus/reload', { method: 'POST' });
+    if (!res.ok) {
+      const data = await res.json();
+      toast && toast({ title: "Prometheus Reload Failed", description: data.error || "Unknown error", variant: "destructive" });
+      return false;
+    }
+    toast && toast({ title: "Prometheus Reloaded", description: "Configuration updated and Prometheus reloaded." });
+    return true;
+  } catch (error) {
+    toast && toast({ title: "Prometheus Reload Error", description: error.message, variant: "destructive" });
+    return false;
+  }
+}
 
 export default function AllAssetsPage() {
   const { toast } = useToast();
@@ -262,6 +276,7 @@ export default function AllAssetsPage() {
          setSelectedAssetForDetails(updatedAsset);
       }
       toast({ title: "Asset Details Saved", description: `Details for ${updatedAsset.name} updated.`});
+      await reloadPrometheusConfig(toast);
     } catch (error) {
       console.error("Error saving asset details:", error);
       toast({ title: "Error", description: (error as Error).message, variant: "destructive" });
@@ -275,7 +290,7 @@ export default function AllAssetsPage() {
     if (selectedAssetForDetails && selectedAssetForDetails.id === updatedAssetFromDialog.id) {
        setSelectedAssetForDetails(updatedAssetFromDialog);
     }
-     // Toast is handled by the dialog itself
+    await reloadPrometheusConfig(toast);
   };
 
   const handleCreateItemTypeSelection = (type: 'asset' | 'folder') => {
@@ -306,6 +321,7 @@ export default function AllAssetsPage() {
         title: "Asset Added!",
         description: `Asset "${savedAsset.name}" of type "${savedAsset.type}" has been configured.`,
       });
+      await reloadPrometheusConfig(toast);
     } catch (error) {
       console.error("Error adding asset:", error);
       toast({ title: "Error Adding Asset", description: (error as Error).message, variant: "destructive" });
@@ -335,6 +351,7 @@ export default function AllAssetsPage() {
         setFolders(prev => [...prev, savedFolder].sort((a,b) => a.name.localeCompare(b.name)));
         toast({ title: "Folder Created", description: `Folder "${savedFolder.name}" added.`});
       }
+      await reloadPrometheusConfig(toast);
     } catch (error) {
       console.error("Error saving folder:", error);
       toast({ title: "Error", description: (error as Error).message, variant: "destructive" });

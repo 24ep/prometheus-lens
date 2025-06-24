@@ -1,4 +1,3 @@
-
 "use client";
 
 import type { Asset, AssetFolder } from '@/types';
@@ -24,6 +23,22 @@ interface AssetDetailsDialogProps {
   onOpenChange: (isOpen: boolean) => void;
   onSaveDetails: (assetId: string, details: { tags: string[], grafanaLink?: string }) => void; // This will call PUT /api/assets/[id]
   onConfigurationSave: (updatedAsset: Asset) => void; // This will pass the updated asset after PUT /api/assets/[id]/configuration
+}
+
+async function reloadPrometheusConfig(toast) {
+  try {
+    const res = await fetch('/api/prometheus/reload', { method: 'POST' });
+    if (!res.ok) {
+      const data = await res.json();
+      toast && toast({ title: "Prometheus Reload Failed", description: data.error || "Unknown error", variant: "destructive" });
+      return false;
+    }
+    toast && toast({ title: "Prometheus Reloaded", description: "Configuration updated and Prometheus reloaded." });
+    return true;
+  } catch (error) {
+    toast && toast({ title: "Prometheus Reload Error", description: error.message, variant: "destructive" });
+    return false;
+  }
 }
 
 export function AssetDetailsDialog({ asset, allFolders, isOpen, onOpenChange, onSaveDetails, onConfigurationSave }: AssetDetailsDialogProps) {
@@ -91,6 +106,7 @@ export function AssetDetailsDialog({ asset, allFolders, isOpen, onOpenChange, on
         setCurrentAssetForDialog(updatedAsset); // Update dialog's internal state
         onConfigurationSave(updatedAsset); // Propagate to parent
         toast({ title: "Configuration Saved", description: `Configuration for ${updatedAsset.name} has been updated.` });
+        await reloadPrometheusConfig(toast);
     } catch (error) {
         console.error("Error saving configuration:", error);
         toast({ title: "Error", description: (error as Error).message, variant: "destructive"});

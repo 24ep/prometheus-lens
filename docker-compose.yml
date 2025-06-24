@@ -1,32 +1,80 @@
-
 version: '3.8'
 
 services:
-  app:
-    build:
-      context: .
-      dockerfile: Dockerfile
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: prometheus
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml
+      - prometheus_data:/prometheus
     ports:
-      - "9002:3000" # Expose app on host port 9002, container runs on 3000
-    environment:
-      - NODE_ENV=production
-      - POSTGRES_HOST=db
-      - POSTGRES_PORT=5432
-      - POSTGRES_USER=prometheuslens
-      - POSTGRES_PASSWORD=prometheuslenspass
-      - POSTGRES_DB=prometheuslensdb
-      - DATABASE_URL=postgresql://prometheuslens:prometheuslenspass@db:5432/prometheuslensdb
-      # For NextAuth or other secrets, you would add them here
-      # NEXTAUTH_URL=http://localhost:9002 
-      # NEXTAUTH_SECRET=your_nextauth_secret
+      - "9090:9090"
+    restart: unless-stopped
     depends_on:
-      db:
-        condition: service_healthy
-    networks:
-      - prometheuslens-net
+      - alertmanager
+      - node_exporter
+      - blackbox_exporter
+      - pushgateway
+      - cadvisor
+
+  grafana:
+    image: grafana/grafana:latest
+    container_name: grafana
+    depends_on:
+      - prometheus
+    ports:
+      - "3000:3000"
+    volumes:
+      - grafana_data:/var/lib/grafana
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+    restart: unless-stopped
+
+  alertmanager:
+    image: prom/alertmanager:latest
+    container_name: alertmanager
+    volumes:
+      - ./alertmanager.yml:/etc/alertmanager/alertmanager.yml
+    ports:
+      - "9093:9093"
+    restart: unless-stopped
+
+  node_exporter:
+    image: prom/node-exporter:latest
+    container_name: node_exporter
+    ports:
+      - "9100:9100"
+    restart: unless-stopped
+
+  blackbox_exporter:
+    image: prom/blackbox-exporter:latest
+    container_name: blackbox_exporter
+    ports:
+      - "9115:9115"
+    restart: unless-stopped
+
+  pushgateway:
+    image: prom/pushgateway:latest
+    container_name: pushgateway
+    ports:
+      - "9091:9091"
+    restart: unless-stopped
+
+  cadvisor:
+    image: google/cadvisor:latest
+    container_name: cadvisor
+    ports:
+      - "8080:8080"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - /sys:/sys:ro
+      - /var/lib/docker/:/var/lib/docker:ro
+    restart: unless-stopped
 
   db:
     image: postgres:15-alpine
+    container_name: prometheus-lens-db
     environment:
       - POSTGRES_USER=prometheuslens
       - POSTGRES_PASSWORD=prometheuslenspass
@@ -34,16 +82,30 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
     ports:
-      - "5432:5432" # Optionally expose DB port to host for direct access/debugging
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U prometheuslens -d prometheuslensdb"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-    networks:
-      - prometheuslens-net
+      - "5432:5432"
+    restart: unless-stopped
+
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: prometheus-lens-app
+    ports:
+      - "3001:3000"
+    environment:
+      - NODE_ENV=production
+      - DATABASE_URL=postgresql://prometheuslens:prometheuslenspass@db:5432/prometheuslensdb
+    volumes:
+      - ./prometheus.yml:/app/prometheus.yml
+    depends_on:
+      - db
+      - prometheus
+      - grafana
+    restart: unless-stopped
 
 volumes:
+  prometheus_data:
+  grafana_data:
   postgres_data:
 
 networks:

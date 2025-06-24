@@ -1,4 +1,3 @@
-
 "use client";
 
 import React, { useState, useEffect } from 'react';
@@ -16,6 +15,22 @@ interface ManageFolderDialogProps {
   onSave: (folderData: { id?: string; name: string; parentId?: string }) => void;
   existingFolder?: AssetFolder | null;
   allFolders: AssetFolder[];
+}
+
+async function reloadPrometheusConfig(toast) {
+  try {
+    const res = await fetch('/api/prometheus/reload', { method: 'POST' });
+    if (!res.ok) {
+      const data = await res.json();
+      toast && toast({ title: "Prometheus Reload Failed", description: data.error || "Unknown error", variant: "destructive" });
+      return false;
+    }
+    toast && toast({ title: "Prometheus Reloaded", description: "Configuration updated and Prometheus reloaded." });
+    return true;
+  } catch (error) {
+    toast && toast({ title: "Prometheus Reload Error", description: error.message, variant: "destructive" });
+    return false;
+  }
 }
 
 export function ManageFolderDialog({ isOpen, onOpenChange, onSave, existingFolder, allFolders }: ManageFolderDialogProps) {
@@ -37,7 +52,7 @@ export function ManageFolderDialog({ isOpen, onOpenChange, onSave, existingFolde
     }
   }, [existingFolder, isOpen]);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (folderName.trim() === '') {
       toast({ title: "Validation Error", description: "Folder name cannot be empty.", variant: "destructive" });
@@ -70,6 +85,7 @@ export function ManageFolderDialog({ isOpen, onOpenChange, onSave, existingFolde
       name: folderName,
       parentId: parentId === NO_PARENT_VALUE ? undefined : parentId,
     });
+    await reloadPrometheusConfig(toast);
     onOpenChange(false); // Close dialog after saving
   };
 
