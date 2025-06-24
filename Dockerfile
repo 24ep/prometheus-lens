@@ -1,22 +1,18 @@
-
 # Stage 1: Install dependencies and build the application
 FROM node:18-alpine AS builder
 WORKDIR /app
 
-# Install pnpm
-RUN npm install -g pnpm
-
-# Copy package.json and pnpm-lock.yaml
-COPY package.json pnpm-lock.yaml ./
+# Copy package.json and package-lock.json
+COPY package.json package-lock.json ./
 
 # Install dependencies
-RUN pnpm install --frozen-lockfile
+RUN npm ci
 
 # Copy the rest of the application code
 COPY . .
 
 # Build the Next.js application
-RUN pnpm build
+RUN npm run build
 
 # Stage 2: Create the production image
 FROM node:18-alpine
@@ -30,16 +26,12 @@ ENV NODE_ENV=production
 COPY --from=builder /app/.next ./.next
 COPY --from=builder /app/public ./public
 COPY --from=builder /app/package.json ./package.json
+COPY --from=builder /app/package-lock.json ./package-lock.json
 COPY --from=builder /app/next.config.ts ./next.config.ts
-# We don't need node_modules from builder if we reinstall minimal set for production
-# Or, if all deps are needed, copy node_modules and skip reinstall (larger image)
 
-# Install only production dependencies using pnpm
-# First, ensure pnpm is available
-RUN npm install -g pnpm
-COPY --from=builder /app/pnpm-lock.yaml ./
-RUN pnpm install --prod --frozen-lockfile
+# Install only production dependencies
+RUN npm ci --omit=dev
 
 EXPOSE 3000
 
-CMD ["pnpm", "start"]
+CMD ["npm", "start"]
