@@ -177,6 +177,7 @@ export default function AllAssetsPage() {
   const [isAssetWizardOpen, setIsAssetWizardOpen] = useState(false);
   const [viewMode, setViewMode] = useState<'list' | 'table'>('list');
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [isReloading, setIsReloading] = useState(false);
 
 
   const refreshData = useCallback(async () => {
@@ -572,6 +573,20 @@ export default function AllAssetsPage() {
 
   return (
     <AppLayout>
+      <div className="flex justify-between items-center mb-6">
+        <h1 className="text-3xl font-headline font-bold text-foreground">All Assets</h1>
+        <Button
+          variant="outline"
+          onClick={async () => {
+            setIsReloading(true);
+            await reloadPrometheusConfig(toast);
+            setIsReloading(false);
+          }}
+          disabled={isReloading}
+        >
+          {isReloading ? 'Reloading...' : 'Reload Prometheus'}
+        </Button>
+      </div>
       <div className="flex h-[calc(100vh-var(--header-height,4rem)-2rem)]">
         <div className="w-64 xl:w-72 border-r bg-card/30 shrink-0">
           <ScrollArea className="h-full p-3">

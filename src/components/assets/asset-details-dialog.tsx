@@ -48,6 +48,7 @@ export function AssetDetailsDialog({ asset, allFolders, isOpen, onOpenChange, on
   const [grafanaLinkInput, setGrafanaLinkInput] = useState('');
   const [isEditConfigOpen, setIsEditConfigOpen] = useState(false);
   const [currentAssetForDialog, setCurrentAssetForDialog] = useState<Asset | null>(null); // Used to manage state within the dialog
+  const [isCheckingHealth, setIsCheckingHealth] = useState(false);
 
   useEffect(() => {
     if (asset) {
@@ -134,6 +135,22 @@ export function AssetDetailsDialog({ asset, allFolders, isOpen, onOpenChange, on
     URL.revokeObjectURL(url);
   };
 
+  const handleCheckHealth = async () => {
+    if (!currentAssetForDialog) return;
+    setIsCheckingHealth(true);
+    try {
+      const res = await fetch(`/api/assets/${currentAssetForDialog.id}/health`);
+      const data = await res.json();
+      if (res.ok && data.status === 'connected') {
+        toast({ title: 'Health Check', description: data.message });
+      } else {
+        toast({ title: 'Health Check', description: data.message, variant: 'destructive' });
+      }
+    } catch (err: any) {
+      toast({ title: 'Health Check Error', description: err.message, variant: 'destructive' });
+    }
+    setIsCheckingHealth(false);
+  };
 
   return (
     <>
@@ -224,6 +241,9 @@ export function AssetDetailsDialog({ asset, allFolders, isOpen, onOpenChange, on
                             <Button variant="outline" size="sm" onClick={handleDownloadYaml} disabled={!currentAssetForDialog.configuration}>
                               <Download className="mr-2 h-4 w-4" />
                               YAML
+                            </Button>
+                            <Button variant="outline" size="sm" onClick={handleCheckHealth} disabled={isCheckingHealth}>
+                              {isCheckingHealth ? 'Checking...' : 'Check Health'}
                             </Button>
                         </div>
                     </div>
