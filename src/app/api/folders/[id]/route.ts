@@ -1,6 +1,6 @@
 
 import { NextResponse } from 'next/server';
-import { query, initializeDatabase, rowToAssetFolder } from '@/lib/db';
+import { query, initializeDatabase, rowToAssetFolder, getClient } from '@/lib/db';
 import type { AssetFolder } from '@/types';
 
 export async function GET(request: Request, { params }: { params: { id: string } }) {
@@ -94,7 +94,7 @@ export async function DELETE(request: Request, { params }: { params: { id: strin
       return NextResponse.json({ error: 'Folder not found' }, { status: 404 });
     }
     
-    const client = await (await import('@/lib/db')).query('SELECT 1').then(() => pool.connect()); // Get a client for transaction
+    const client = await getClient();
 
     try {
       await client.query('BEGIN');

@@ -27,6 +27,11 @@ function getDbPool() {
   return pool;
 }
 
+export async function getClient() {
+  const pool = getDbPool();
+  return pool.connect();
+}
+
 export async function query(text: string, params?: any[]) {
   const start = Date.now();
   const client = await getDbPool().connect();
